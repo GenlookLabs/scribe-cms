@@ -72,8 +72,12 @@ export default async function HomePage({ params }: Props) {
         <div className="links">
           <Link href="/examples">{t("viewExamples")}</Link>
           <Link href="/getting-started">{t("viewGettingStarted")}</Link>
-          <a href="https://github.com/GenlookLabs/scribe-cms" target="_blank" rel="noopener noreferrer">
-            {t("github")}
+          <a
+            href="https://github.com/GenlookLabs/scribe-cms/tree/main/packages/scribe-cms/docs"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t("viewDocs")}
           </a>
         </div>
       </main>
