@@ -83,17 +83,22 @@ type.
 
 ## 3. Validate
 
+After `pnpm install`, the `scribe` CLI is on your PATH (same as `next`):
+
 ```bash
-npx scribe validate
+pnpm scribe validate
+pnpm scribe status
 ```
 
-This checks every file against its schema, verifies that `author: jane`
-points at a real author document, and checks the translation store for
-consistency. Wire it in front of your build:
+Wire it in front of your build:
 
 ```jsonc
 // package.json
-{ "scripts": { "build": "scribe validate && <your framework build>" } }
+{
+  "scripts": {
+    "build": "scribe validate && <your framework build>",
+  },
+}
 ```
 
 ## 4. Read content
@@ -104,7 +109,7 @@ import config from "./scribe.config";
 
 const scribe = createScribe(config);
 
-const posts = scribe.blog.list();                       // BlogDoc[], newest first
+const posts = scribe.blog.list(); // BlogDoc[], newest first
 const { document } = scribe.blog.resolve("hello-world", "fr");
 const author = scribe.blog.related(document!, "author"); // AuthorDoc, non-null
 ```

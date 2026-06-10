@@ -8,7 +8,7 @@
     "prebuild": "node scripts/seed-translations.mjs",
     "build": "scribe validate && next build",
     "start": "next start",
-    "scribe:validate": "scribe validate"
+    "scribe": "scribe"
   },
   "dependencies": {
     "better-sqlite3": "^11.10.0",

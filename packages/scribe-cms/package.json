@@ -1,6 +1,6 @@
 {
   "name": "scribe-cms",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Typed, file-based CMS for multilingual MDX sites",
   "homepage": "https://scribe.genlook.app",
   "repository": {
@@ -13,7 +13,7 @@
   "type": "module",
   "license": "MIT",
   "keywords": ["cms", "mdx", "i18n", "zod", "content", "translation"],
-  "files": ["dist", "README.md"],
+  "files": ["dist", "bin", "README.md"],
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
@@ -34,10 +34,11 @@
   "module": "./dist/index.js",
   "types": "./dist/src/index.d.ts",
   "bin": {
-    "scribe": "./dist/cli/index.js"
+    "scribe": "./bin/scribe.js"
   },
   "scripts": {
     "build": "tsup && tsc -p tsconfig.dts.json",
+    "postinstall": "node ./bin/ensure-built.mjs",
     "dev": "tsup --watch",
     "clean": "rm -rf dist",
     "test": "pnpm build && node --import tsx --test \"src/**/*.test.ts\"",
