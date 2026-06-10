@@ -20,8 +20,6 @@ Set `GEMINI_API_KEY` when using `scribe translate`.
 
 ```ts
 // scribe.config.ts (at your project root)
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { defineConfig, defineContentType, field } from "scribe-cms";
 
@@ -37,7 +35,7 @@ const authorSchema = z.object({
 });
 
 export default defineConfig({
-  rootDir: path.dirname(fileURLToPath(import.meta.url)),
+  rootDir: ".", // relative to this file (CLI) / process.cwd() (runtime)
   // contentDir: "content"            (default)
   // store: ".scribe/store.sqlite"     (default)
   locales: ["en", "fr"],

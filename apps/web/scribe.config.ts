@@ -1,5 +1,3 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { defineConfig, defineContentType, field } from "scribe-cms";
 import { defaultLocale, locales } from "./locales";
@@ -18,7 +16,10 @@ const exampleSchema = z.object({
 });
 
 export default defineConfig({
-  rootDir: path.dirname(fileURLToPath(import.meta.url)),
+  // Relative: the CLI resolves it against this file's directory, the runtime
+  // against process.cwd(). Never derive it from import.meta.url — bundlers
+  // inline that to the build machine's path, which doesn't exist on Vercel.
+  rootDir: ".",
   locales: [...locales],
   defaultLocale,
   types: [

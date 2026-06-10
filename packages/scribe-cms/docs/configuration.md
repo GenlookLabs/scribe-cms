@@ -8,7 +8,7 @@ Both the runtime (`createScribe`) and the CLI (which discovers
 
 ```ts
 export default defineConfig({
-  rootDir: path.dirname(fileURLToPath(import.meta.url)),
+  rootDir: ".",
   contentDir: "content",            // default
   store: ".scribe/store.sqlite",     // default
   locales: ["en", "fr", "de"],
@@ -21,7 +21,7 @@ export default defineConfig({
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `rootDir` | — (required) | Absolute project root. Relative `contentDir`/`store` resolve against it. |
+| `rootDir` | — (required) | Project root. Keep it relative (usually `"."`): the CLI resolves it against the config file's directory, `createScribe` against `process.cwd()`. Don't build it from `import.meta.url` — bundlers inline that path at build time, which breaks on serverless hosts like Vercel. Relative `contentDir`/`store` resolve against it. |
 | `contentDir` | `"content"` | Directory containing one folder per content type. |
 | `store` | `".scribe/store.sqlite"` | SQLite translation store. **Commit it — do not gitignore `.scribe/`.** |
 | `locales` | — (required) | All locales, including the default one. |

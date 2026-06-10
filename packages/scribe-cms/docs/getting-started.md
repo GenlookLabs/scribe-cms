@@ -16,8 +16,6 @@ external to your bundler (see
 Put it at your project root:
 
 ```ts
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { defineConfig, defineContentType, field } from "scribe-cms";
 
@@ -33,7 +31,7 @@ const authorSchema = z.object({
 });
 
 export default defineConfig({
-  rootDir: path.dirname(fileURLToPath(import.meta.url)),
+  rootDir: ".", // relative to this file (CLI) / process.cwd() (runtime)
   locales: ["en", "fr", "de"],
   types: [
     defineContentType({
