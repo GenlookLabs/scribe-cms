@@ -1,5 +1,5 @@
-import { createScribe } from "scribe-crm/runtime";
-import type { ScribeClient } from "scribe-crm/runtime";
+import { createScribe } from "scribe-cms/runtime";
+import type { ScribeClient } from "scribe-cms/runtime";
 import config from "../../scribe.config";
 
 export type WebConfig = typeof config;

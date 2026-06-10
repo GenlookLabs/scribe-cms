@@ -7,7 +7,7 @@ order: 2
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { defineConfig, defineContentType, field } from "scribe-crm";
+import { defineConfig, defineContentType, field } from "scribe-cms";
 
 const blogSchema = z.object({
   title: field.translatable(z.string().min(1)),

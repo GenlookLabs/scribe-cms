@@ -1,11 +1,11 @@
 ---
 title: "Getting started"
-description: "Install scribe-crm, define your schema, write content, validate, and read it at runtime."
+description: "Install scribe-cms, define your schema, write content, validate, and read it at runtime."
 ---
 
 ## 1. Install
 
-Add scribe-crm and its peer dependencies to your project.
+Add scribe-cms and its peer dependencies to your project.
 
 ## 2. Create scribe.config.ts
 
@@ -21,6 +21,6 @@ Run `scribe validate` before your build to catch schema errors, broken relations
 
 ## 5. Read at runtime
 
-Import `createScribe` from `scribe-crm/runtime`, pass your config, and use typed accessors like `scribe.blog.list()` and `scribe.blog.resolve(slug, locale)`.
+Import `createScribe` from `scribe-cms/runtime`, pass your config, and use typed accessors like `scribe.blog.list()` and `scribe.blog.resolve(slug, locale)`.
 
 See the [Examples](/examples) page for copy-paste snippets.

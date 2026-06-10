@@ -9,7 +9,7 @@ Scribe has no framework dependency — it reads files and SQLite in-process and 
 ## Install
 
 ```bash
-pnpm add scribe-crm zod better-sqlite3
+pnpm add scribe-cms zod better-sqlite3
 ```
 
 Set `GEMINI_API_KEY` when using `scribe translate`.
@@ -23,7 +23,7 @@ Set `GEMINI_API_KEY` when using `scribe translate`.
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { defineConfig, defineContentType, field } from "scribe-crm";
+import { defineConfig, defineContentType, field } from "scribe-cms";
 
 const blogSchema = z.object({
   title: field.translatable(z.string().min(1)),
@@ -76,7 +76,7 @@ fields `publishedAt`, `updatedAt`, `noindex`, `aliases`, `redirect_to`, and
 ### 3. Read content
 
 ```ts
-import { createScribe } from "scribe-crm/runtime"; // bundler-safe entry; plain "scribe-crm" works in scripts
+import { createScribe } from "scribe-cms/runtime"; // bundler-safe entry; plain "scribe-cms" works in scripts
 import config from "./scribe.config";
 
 const scribe = createScribe(config);
@@ -123,7 +123,7 @@ Scribe runs anywhere Node does — see
 [Runtime API → Framework integration](./docs/runtime-api.md#framework-integration).
 The short version:
 
-- Use `scribe-crm/runtime` in app code, `scribe-crm` in build scripts/CLI.
+- Use `scribe-cms/runtime` in app code, `scribe-cms` in build scripts/CLI.
 - Keep `better-sqlite3` (a native module) external to your bundler
   (e.g. Next.js `serverExternalPackages`, Vite `ssr.external`).
 - Gate builds: `"build": "scribe validate && <your framework build>"`.

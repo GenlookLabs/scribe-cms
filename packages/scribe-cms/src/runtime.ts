@@ -1,4 +1,4 @@
-/** App-code entry — use instead of `scribe-crm` in bundled server code (Next.js, Astro, …) to keep CLI/translator code paths out of bundler tracing. */
+/** App-code entry — use instead of `scribe-cms` in bundled server code (Next.js, Astro, …) to keep CLI/translator code paths out of bundler tracing. */
 export { createScribe } from "./create-scribe.js";
 export type {
   ScribeConfigInput,

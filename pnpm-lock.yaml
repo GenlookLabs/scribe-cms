@@ -28,9 +28,9 @@ importers:
       react-dom:
         specifier: ^19.1.0
         version: 19.2.7(react@19.2.7)
-      scribe-crm:
+      scribe-cms:
         specifier: workspace:*
-        version: link:../../packages/scribe
+        version: link:../../packages/scribe-cms
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -48,7 +48,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/scribe:
+  packages/scribe-cms:
     dependencies:
       '@google/genai':
         specifier: ^1.44.0

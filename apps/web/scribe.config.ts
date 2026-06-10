@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { defineConfig, defineContentType, field } from "scribe-crm";
+import { defineConfig, defineContentType, field } from "scribe-cms";
 import { defaultLocale, locales } from "./locales";
 
 const pageSchema = z.object({

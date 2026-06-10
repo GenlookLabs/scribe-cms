@@ -1,9 +1,9 @@
 {
-  "name": "scribe-crm-monorepo",
+  "name": "scribe-cms-monorepo",
   "private": true,
   "scripts": {
     "dev": "pnpm --filter web dev",
-    "build": "pnpm --filter scribe-crm build && pnpm --filter web build",
+    "build": "pnpm --filter scribe-cms build && pnpm --filter web build",
     "publish:npm": "bash scripts/publish-scribe.sh"
   }
 }

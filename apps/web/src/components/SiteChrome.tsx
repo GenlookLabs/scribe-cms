@@ -44,7 +44,7 @@ export function SiteFooter() {
     <footer className="footer">
       <div className="footer-inner">
         <div className="footer-links">
-          <a href="https://www.npmjs.com/package/scribe-crm" target="_blank" rel="noopener noreferrer">
+          <a href="https://www.npmjs.com/package/scribe-cms" target="_blank" rel="noopener noreferrer">
             {t("footerNpm")}
           </a>
           <a href="https://github.com/GenlookLabs" target="_blank" rel="noopener noreferrer">

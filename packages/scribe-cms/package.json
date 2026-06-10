@@ -1,5 +1,5 @@
 {
-  "name": "scribe-crm",
+  "name": "scribe-cms",
   "version": "0.0.1",
   "description": "Typed, file-based CMS for multilingual MDX sites",
   "type": "module",

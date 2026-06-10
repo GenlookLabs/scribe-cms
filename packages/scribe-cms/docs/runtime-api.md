@@ -1,7 +1,7 @@
 # Runtime API
 
 ```ts
-import { createScribe } from "scribe-crm/runtime";
+import { createScribe } from "scribe-cms/runtime";
 import config from "./scribe.config";
 
 const scribe = createScribe(config);
@@ -184,7 +184,7 @@ slugs), use the build-script entry:
 
 ```ts
 // scripts/generate-redirects.ts — run before the app build
-import { buildAllContentRedirects, createProject, loadConfigSync } from "scribe-crm";
+import { buildAllContentRedirects, createProject, loadConfigSync } from "scribe-cms";
 
 const config = loadConfigSync();
 const rules = buildAllContentRedirects(createProject(config), {
@@ -206,8 +206,8 @@ const rules = buildAllContentRedirects(createProject(config), {
 Scribe is framework-agnostic — the runtime is plain Node and works in any
 server-rendered or statically-built stack. Three rules apply everywhere:
 
-1. Import from **`scribe-crm/runtime`** in app code (it excludes the
-   CLI / translator code paths from bundler tracing); use `scribe-crm`
+1. Import from **`scribe-cms/runtime`** in app code (it excludes the
+   CLI / translator code paths from bundler tracing); use `scribe-cms`
    in build scripts.
 2. Keep **`better-sqlite3`** (a native module) and Scribe external to your
    bundler — e.g. Next.js `serverExternalPackages`, Vite/Astro
@@ -216,8 +216,8 @@ server-rendered or statically-built stack. Three rules apply everywhere:
 
 ```ts
 // src/lib/scribe.ts
-import { createScribe } from "scribe-crm/runtime";
-import type { ScribeClient } from "scribe-crm/runtime";
+import { createScribe } from "scribe-cms/runtime";
+import type { ScribeClient } from "scribe-cms/runtime";
 import config from "../../scribe.config";
 
 let cached: ScribeClient<typeof config> | null = null;
@@ -233,7 +233,7 @@ Gate builds on content health: `"build": "scribe validate && <framework build>"`
 ```ts
 // next.config.ts
 const nextConfig = {
-  serverExternalPackages: ["better-sqlite3", "scribe-crm", "scribe-crm/runtime"],
+  serverExternalPackages: ["better-sqlite3", "scribe-cms", "scribe-cms/runtime"],
 };
 ```
 

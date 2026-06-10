@@ -3,7 +3,7 @@
 ## Install
 
 ```bash
-pnpm add scribe-crm zod better-sqlite3
+pnpm add scribe-cms zod better-sqlite3
 ```
 
 Requirements: Node 20+, Zod v4. Scribe is framework-agnostic — it works with
@@ -19,7 +19,7 @@ Put it at your project root:
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { defineConfig, defineContentType, field } from "scribe-crm";
+import { defineConfig, defineContentType, field } from "scribe-cms";
 
 const blogSchema = z.object({
   title: field.translatable(z.string().min(1)),
@@ -99,7 +99,7 @@ consistency. Wire it in front of your build:
 ## 4. Read content
 
 ```ts
-import { createScribe } from "scribe-crm/runtime";
+import { createScribe } from "scribe-cms/runtime";
 import config from "./scribe.config";
 
 const scribe = createScribe(config);

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { createHash } from "node:crypto";
 import matter from "gray-matter";
 import Database from "better-sqlite3";
-import { loadConfigSync } from "scribe-crm";
+import { loadConfigSync } from "scribe-cms";
 
 const config = loadConfigSync({
   configPath: path.join(process.cwd(), "scribe.config.ts"),
@@ -26,11 +26,11 @@ const frenchPages = {
     frontmatter: {
       title: "Premiers pas",
       description:
-        "Installez scribe-crm, définissez votre schéma, rédigez du contenu, validez et lisez-le au runtime.",
+        "Installez scribe-cms, définissez votre schéma, rédigez du contenu, validez et lisez-le au runtime.",
     },
     body: `## 1. Installation
 
-Ajoutez scribe-crm et ses dépendances peer à votre projet.
+Ajoutez scribe-cms et ses dépendances peer à votre projet.
 
 ## 2. Créer scribe.config.ts
 
@@ -46,7 +46,7 @@ Exécutez \`scribe validate\` avant votre build pour détecter les erreurs de sc
 
 ## 5. Lire au runtime
 
-Importez \`createScribe\` depuis \`scribe-crm/runtime\`, passez votre config et utilisez des accesseurs typés comme \`scribe.blog.list()\` et \`scribe.blog.resolve(slug, locale)\`.
+Importez \`createScribe\` depuis \`scribe-cms/runtime\`, passez votre config et utilisez des accesseurs typés comme \`scribe.blog.list()\` et \`scribe.blog.resolve(slug, locale)\`.
 
 Consultez la page [Exemples](/examples) pour des extraits à copier-coller.`,
   },
@@ -55,7 +55,7 @@ Consultez la page [Exemples](/examples) pour des extraits à copier-coller.`,
 const frenchExamples = {
   install: {
     title: "Installation",
-    caption: "Ajoutez scribe-crm à tout projet Node 20+.",
+    caption: "Ajoutez scribe-cms à tout projet Node 20+.",
   },
   "scribe-config": {
     title: "Configuration",

@@ -68,7 +68,7 @@ Every schema field is one of three kinds. Unmarked fields default to
 **structural**.
 
 ```ts
-import { field } from "scribe-crm";
+import { field } from "scribe-cms";
 
 const schema = z.object({
   // Sent to the translator, stored per locale:
@@ -105,7 +105,7 @@ one is a warning), and are dereferenced at runtime with
 For app-side type aliases, derive everything from the config:
 
 ```ts
-import type { ScribeClient, ScribeDocs } from "scribe-crm/runtime";
+import type { ScribeClient, ScribeDocs } from "scribe-cms/runtime";
 import config from "./scribe.config";
 
 type MyScribe = ScribeClient<typeof config>;
