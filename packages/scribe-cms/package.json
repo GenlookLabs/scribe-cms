@@ -2,6 +2,14 @@
   "name": "scribe-cms",
   "version": "0.0.1",
   "description": "Typed, file-based CMS for multilingual MDX sites",
+  "homepage": "https://scribe.genlook.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GenlookLabs/scribe-cms.git"
+  },
+  "bugs": {
+    "url": "https://github.com/GenlookLabs/scribe-cms/issues"
+  },
   "type": "module",
   "license": "MIT",
   "keywords": ["cms", "mdx", "i18n", "zod", "content", "translation"],

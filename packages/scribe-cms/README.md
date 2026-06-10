@@ -130,3 +130,5 @@ The short version:
 - Redirects: `buildAllContentRedirects(project)` produces
   `{ source, destination, permanent }` rules from aliases, `redirect_to`, and
   cross-locale slugs — map them to your framework's redirect config.
+
+**Site & examples:** [scribe.genlook.app](https://scribe.genlook.app) · [Example Next.js app](https://github.com/GenlookLabs/scribe-cms/tree/main/apps/web)
