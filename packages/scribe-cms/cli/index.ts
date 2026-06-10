@@ -4,6 +4,7 @@ import { listRevisions } from "../src/storage/translations.js";
 import { loadEnvFromCwd } from "../src/config/load-env.js";
 import { buildWorklist, resolveLocalesFromPreset } from "../src/translate/worklist.js";
 import { startStudio } from "../studio/server.js";
+import { promptTranslateSelection } from "./prompt-translate.js";
 
 interface CliOptions {
   config?: string;
@@ -104,6 +105,15 @@ Commands:
   translate              Translate stale/missing locale pages
   history <type> <slug>  Show revision timeline
   studio                 Start read-only local studio
+
+Translate flags:
+  --type <id>            Content type (interactive picker in a TTY when omitted)
+  --preset <name>        Locale preset from config (interactive picker in a TTY)
+  --locale <code>...     Target locale(s); overrides --preset
+  --slug <en-slug>       Single English document
+  --model <id>           Gemini model override
+  --dry-run              List work without writing
+  --force                Re-translate even when hashes match
 `);
     return;
   }
@@ -136,9 +146,14 @@ Commands:
       break;
     }
     case "translate": {
-      const locales = resolveLocalesFromPreset(config, options.preset, options.locale);
+      const selection = await promptTranslateSelection(config, {
+        type: options.type,
+        preset: options.preset,
+        locale: options.locale,
+      });
+      const locales = resolveLocalesFromPreset(config, selection.preset, selection.locale);
       const worklist = buildWorklist(config, {
-        contentType: options.type,
+        contentType: selection.contentType,
         locales,
         enSlug: options.slug,
       });
