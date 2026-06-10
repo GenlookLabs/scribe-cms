@@ -67,7 +67,9 @@ export function resolveStorePath(config: ScribeConfig): string {
 /** Open the SQLite translation store (creates schema if missing). */
 export function openStore(config: ScribeConfig, mode: SqliteMode = "readwrite"): Database.Database {
   const storePath = resolveStorePath(config);
-  fs.mkdirSync(path.dirname(storePath), { recursive: true });
+  if (mode === "readwrite") {
+    fs.mkdirSync(path.dirname(storePath), { recursive: true });
+  }
   const db = new Database(storePath, { readonly: mode === "readonly" });
   if (mode === "readwrite") {
     migrate(db);

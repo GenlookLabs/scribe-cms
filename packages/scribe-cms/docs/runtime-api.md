@@ -234,6 +234,10 @@ Gate builds on content health: `"build": "scribe validate && <framework build>"`
 // next.config.ts
 const nextConfig = {
   serverExternalPackages: ["better-sqlite3", "scribe-cms", "scribe-cms/runtime"],
+  // Required on Vercel — Scribe reads content/ and .scribe/ at runtime.
+  outputFileTracingIncludes: {
+    "/**": ["./content/**/*", "./.scribe/**/*"],
+  },
 };
 ```
 
