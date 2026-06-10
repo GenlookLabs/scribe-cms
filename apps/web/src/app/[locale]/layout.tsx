@@ -26,7 +26,7 @@ export default async function LocaleLayout({ children, params }: Props) {
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
-      <div className="page">{children}</div>
+      <div className="page">{children}</div>x
     </NextIntlClientProvider>
   );
 }
