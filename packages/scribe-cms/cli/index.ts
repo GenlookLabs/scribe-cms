@@ -5,6 +5,7 @@ import { loadEnvFromCwd } from "../src/config/load-env.js";
 import { buildWorklist, resolveLocalesFromPreset } from "../src/translate/worklist.js";
 import { startStudio } from "../studio/server.js";
 import { promptTranslateSelection } from "./prompt-translate.js";
+import { createTranslateProgressReporter } from "./translate-progress.js";
 
 interface CliOptions {
   config?: string;
@@ -17,6 +18,8 @@ interface CliOptions {
   dryRun?: boolean;
   force?: boolean;
   port?: number;
+  concurrency?: number;
+  noProgress?: boolean;
 }
 
 function parseArgs(argv: string[]): { command: string; options: CliOptions; rest: string[] } {
@@ -74,6 +77,16 @@ function parseArgs(argv: string[]): { command: string; options: CliOptions; rest
       i++;
       continue;
     }
+    if (arg === "--concurrency") {
+      options.concurrency = Number(argv[++i]);
+      i++;
+      continue;
+    }
+    if (arg === "--no-progress") {
+      options.noProgress = true;
+      i++;
+      continue;
+    }
     if (arg.startsWith("--")) {
       throw new Error(`Unknown flag: ${arg}`);
     }
@@ -112,8 +125,10 @@ Translate flags:
   --locale <code>...     Target locale(s); overrides --preset
   --slug <en-slug>       Single English document
   --model <id>           Gemini model override
+  --concurrency <n>      Parallel translations (default: 3)
   --dry-run              List work without writing
   --force                Re-translate even when hashes match
+  --no-progress          Plain line logging instead of live progress
 `);
     return;
   }
@@ -157,17 +172,27 @@ Translate flags:
         locales,
         enSlug: options.slug,
       });
-      console.log(`Translating ${worklist.length} page(s)...`);
+      if (worklist.length === 0) {
+        console.log("Nothing to translate.");
+        break;
+      }
+
+      const reporter = createTranslateProgressReporter({
+        enabled: !options.noProgress,
+        dryRun: options.dryRun,
+      });
+
       const results = await translateWorklist(config, worklist, {
         model: options.model,
         dryRun: options.dryRun,
         force: options.force,
+        concurrency: options.concurrency,
+        onProgress: reporter.onEvent,
       });
-      for (const result of results) {
-        console.log(
-          `${result.contentType}/${result.enSlug}@${result.locale}: ${result.skipped ? "skipped" : "translated"}${result.model ? ` (${result.model})` : ""}`,
-        );
-      }
+      reporter.finish();
+
+      const failed = results.filter((result) => result.failed);
+      if (failed.length > 0) process.exitCode = 1;
       break;
     }
     case "history": {

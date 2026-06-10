@@ -50,6 +50,11 @@ export type { NextRedirectRule } from "./redirects/types.js";
 export type { RedirectSourceSlugs } from "./redirects/build-redirects.js";
 export { buildWorklist, resolveLocalesFromPreset } from "./translate/worklist.js";
 export { translatePage, translateWorklist } from "./translate/page-translator.js";
+export type {
+  TranslatePageResult,
+  TranslateProgressEvent,
+  TranslateWorklistTotals,
+} from "./translate/page-translator.js";
 export { generateSitemap } from "./sitemap/generate-sitemap.js";
 export type {
   GenerateSitemapOptions,

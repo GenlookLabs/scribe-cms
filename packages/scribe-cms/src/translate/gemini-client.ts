@@ -1,6 +1,17 @@
 import { GoogleGenAI } from "@google/genai";
+import {
+  DEFAULT_GEMINI_MODEL,
+  normalizeGeminiDisplayName,
+  resolveGeminiModelId,
+} from "./gemini-models.js";
 
-const DEFAULT_MODEL = "gemini-2.5-pro";
+const DEFAULT_MODEL = DEFAULT_GEMINI_MODEL;
+
+export interface GeminiTokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
 
 export interface GeminiTranslationResult {
   model: string;
@@ -10,6 +21,7 @@ export interface GeminiTranslationResult {
     body: string;
     slug?: string;
   };
+  usage: GeminiTokenUsage;
 }
 
 function extractJson(text: string): string {
@@ -31,10 +43,13 @@ export async function translatePageWithGemini(input: {
     throw new Error("GEMINI_API_KEY is required for scribe translate");
   }
 
-  const model = input.model ?? process.env.PROSE_GEMINI_MODEL ?? DEFAULT_MODEL;
+  const displayModel = normalizeGeminiDisplayName(
+    input.model ?? process.env.PROSE_GEMINI_MODEL ?? DEFAULT_MODEL,
+  );
+  const apiModel = resolveGeminiModelId(displayModel);
   const ai = new GoogleGenAI({ apiKey });
   const response = await ai.models.generateContent({
-    model,
+    model: apiModel,
     contents: input.prompt,
     config: {
       responseMimeType: "application/json",
@@ -52,5 +67,12 @@ export async function translatePageWithGemini(input: {
     throw new Error("Gemini response missing frontmatter/body");
   }
 
-  return { model, raw, parsed };
+  const usageMetadata = response.usageMetadata;
+  const usage: GeminiTokenUsage = {
+    inputTokens: usageMetadata?.promptTokenCount ?? 0,
+    outputTokens: usageMetadata?.candidatesTokenCount ?? 0,
+    totalTokens: usageMetadata?.totalTokenCount ?? 0,
+  };
+
+  return { model: displayModel, raw, parsed, usage };
 }
