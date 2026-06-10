@@ -116,6 +116,7 @@ scribe studio                  # read-only local admin UI
 
 Translations are stored in `.scribe/store.sqlite` keyed by a hash of the EN
 translatable content, so `scribe translate` only re-translates what changed.
+**Commit `.scribe/`** — do not add it to `.gitignore`.
 
 ## Framework integration
 

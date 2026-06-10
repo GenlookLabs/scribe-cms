@@ -117,7 +117,7 @@ export interface ScribeConfigInput<
   rootDir: string;
   /** Directory containing the per-type content folders. Default: `"content"`. */
   contentDir?: string;
-  /** Path to the SQLite translation store. Default: `".scribe/store.sqlite"`. */
+  /** Path to the SQLite translation store. Default: `".scribe/store.sqlite"`. Commit this file; do not gitignore `.scribe/`. */
   store?: string;
   /** All locales, including the default one. */
   locales: string[];

@@ -126,5 +126,5 @@ npx scribe translate --locale fr
 
 Scribe finds every page that is missing or stale in French, translates the
 fields you marked `field.translatable()`, and stores the result in
-`.scribe/store.sqlite`. Commit that file. Details in
-[Translation](./translation.md).
+`.scribe/store.sqlite`. **Commit that directory** — never add `.scribe/` to
+`.gitignore`. Details in [Translation](./translation.md).

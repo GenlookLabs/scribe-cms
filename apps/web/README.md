@@ -11,7 +11,7 @@ Browse the source here on GitHub — it is meant to be read and copied from, not
 - **`src/lib/scribe.ts`** — `createScribe()` client
 - **`src/app/[locale]/`** — pages rendered from scribe content
 - **`src/i18n/`** + **`messages/`** — UI locale routing (next-intl) alongside scribe content locales
-- **`.scribe/store.sqlite`** — generated translations (French seeded at build time)
+- **`.scribe/store.sqlite`** — generated translations (French seeded at build time). **Committed to git** — do not gitignore `.scribe/`.
 
 Content copy comes from scribe. Nav labels and chrome come from next-intl — the same split you would use in production.
 

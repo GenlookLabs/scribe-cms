@@ -22,7 +22,7 @@ content/blog/my-post.mdx          you write this (EN)
         │
         │  scribe translate
         ▼
-.scribe/store.sqlite               generated translations (fr, de, …)
+.scribe/store.sqlite               generated translations (fr, de, …) — commit, do not gitignore
         │
         │  createScribe(config)
         ▼

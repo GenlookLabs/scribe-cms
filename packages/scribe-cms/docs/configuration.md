@@ -23,7 +23,7 @@ export default defineConfig({
 | --- | --- | --- |
 | `rootDir` | — (required) | Absolute project root. Relative `contentDir`/`store` resolve against it. |
 | `contentDir` | `"content"` | Directory containing one folder per content type. |
-| `store` | `".scribe/store.sqlite"` | SQLite translation store. Commit it. |
+| `store` | `".scribe/store.sqlite"` | SQLite translation store. **Commit it — do not gitignore `.scribe/`.** |
 | `locales` | — (required) | All locales, including the default one. |
 | `defaultLocale` | `"en"` | Canonical source locale. Must appear in `locales`. |
 | `localePresets` | — | Named locale groups for `scribe translate --preset <name>`. |

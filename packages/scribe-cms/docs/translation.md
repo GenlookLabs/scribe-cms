@@ -54,7 +54,7 @@ export default defineConfig({
   translate: {
     context: "MyBrand is a B2B SaaS. Never translate the brand name MyBrand.",
     rules: ["Keep numbers and statistics accurate."],
-    slugPreserveTerms: ["mybrand"],   // kept verbatim in localized slugs
+    slugPreserveTerms: ["mybrand"], // kept verbatim in localized slugs
   },
   types: [
     defineContentType({
@@ -71,13 +71,13 @@ export default defineConfig({
 });
 ```
 
-| Option | Scope | Description |
-| --- | --- | --- |
-| `context` | project + type | Brand/domain context prepended to every request (project and type contexts are concatenated). |
-| `rules` | project + type | Extra rules appended to the defaults. |
-| `prompt` | project or type | Replace the default system prompt entirely. |
-| `defaultModel` / `model` | project / type | Gemini model id. Default: `gemini-2.5-pro` (also overridable via the `PROSE_GEMINI_MODEL` env var or `--model`). |
-| `slugPreserveTerms` | project | Lowercase terms kept verbatim in localized slugs. |
+| Option                   | Scope           | Description                                                                                                      |
+| ------------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `context`                | project + type  | Brand/domain context prepended to every request (project and type contexts are concatenated).                    |
+| `rules`                  | project + type  | Extra rules appended to the defaults.                                                                            |
+| `prompt`                 | project or type | Replace the default system prompt entirely.                                                                      |
+| `defaultModel` / `model` | project / type  | Gemini model id. Default: `gemini-2.5-pro` (also overridable via the `PROSE_GEMINI_MODEL` env var or `--model`). |
+| `slugPreserveTerms`      | project         | Lowercase terms kept verbatim in localized slugs.                                                                |
 
 ## Reviewing translations
 
@@ -109,13 +109,13 @@ scribe translate --preset ultraLight
 
 ## CLI reference
 
-| Command | Description |
-| --- | --- |
-| `scribe status` | English doc counts + per-locale translation counts. |
-| `scribe validate` | Schemas, relations, aliases, slugs, store consistency. Non-zero exit on errors. |
-| `scribe translate [flags]` | Translate missing/stale pages. Flags above. |
-| `scribe history <type> <en-slug> [locale]` | Revision timeline. |
-| `scribe studio [--port 3600]` | Local read-only admin UI. |
+| Command                                    | Description                                                                     |
+| ------------------------------------------ | ------------------------------------------------------------------------------- |
+| `scribe status`                            | English doc counts + per-locale translation counts.                             |
+| `scribe validate`                          | Schemas, relations, aliases, slugs, store consistency. Non-zero exit on errors. |
+| `scribe translate [flags]`                 | Translate missing/stale pages. Flags above.                                     |
+| `scribe history <type> <en-slug> [locale]` | Revision timeline.                                                              |
+| `scribe studio [--port 3600]`              | Local read-only admin UI.                                                       |
 
 All commands accept `--config <path>` (default: `scribe.config.ts` in the
 working directory).
