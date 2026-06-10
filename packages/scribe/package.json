@@ -1,0 +1,62 @@
+{
+  "name": "scribe-crm",
+  "version": "0.0.1",
+  "description": "Typed, file-based CMS for multilingual MDX sites",
+  "type": "module",
+  "license": "MIT",
+  "keywords": ["cms", "mdx", "i18n", "zod", "content", "translation"],
+  "files": ["dist", "README.md"],
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./runtime": {
+      "types": "./dist/src/runtime.d.ts",
+      "import": "./dist/runtime.js",
+      "require": "./dist/runtime.cjs"
+    },
+    "./studio": {
+      "types": "./dist/studio/server.d.ts",
+      "import": "./dist/studio/server.js"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/src/index.d.ts",
+  "bin": {
+    "scribe": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsup && tsc -p tsconfig.dts.json",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "test": "pnpm build && node --import tsx --test \"src/**/*.test.ts\"",
+    "prepublishOnly": "pnpm build",
+    "publish:npm": "npm publish --access public"
+  },
+  "dependencies": {
+    "@google/genai": "^1.44.0",
+    "@hono/node-server": "^1.19.9",
+    "better-sqlite3": "^11.10.0",
+    "dotenv": "^17.4.2",
+    "gray-matter": "^4.0.3",
+    "hono": "^4.11.4",
+    "jiti": "^2.6.1"
+  },
+  "peerDependencies": {
+    "zod": "^4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.6.2",
+    "tsup": "^8.5.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.3",
+    "zod": "^4.4.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

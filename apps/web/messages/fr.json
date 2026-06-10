@@ -1,0 +1,19 @@
+{
+  "Site": {
+    "tagline": "CMS MDX typé",
+    "home": "Accueil",
+    "examples": "Exemples",
+    "gettingStarted": "Premiers pas",
+    "install": "Installation",
+    "viewExamples": "Voir les exemples →",
+    "viewGettingStarted": "Premiers pas →",
+    "github": "GitHub",
+    "examplesTitle": "Exemples",
+    "examplesLead": "Extraits à copier-coller pour les usages courants de scribe-crm.",
+    "languageLabel": "Langue",
+    "footerNpm": "npm",
+    "footerGithub": "GitHub",
+    "madeBy": "Créé par",
+    "genlookTagline": "Essayage virtuel IA pour l'e-commerce"
+  }
+}

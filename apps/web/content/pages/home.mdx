@@ -1,0 +1,11 @@
+---
+title: "Typed MDX content for multilingual sites"
+description: "English source files on disk, locale translations in SQLite, Zod schemas, and a framework-agnostic runtime."
+installCommand: "pnpm add scribe-crm zod better-sqlite3"
+---
+
+Scribe validates frontmatter against your Zod schema, translates translatable fields with an LLM, and serves content through a typed runtime API.
+
+- **File-based English content** — one `.mdx` file per document, versioned in git.
+- **SQLite translations** — only changed pages get re-translated.
+- **Typed runtime** — `createScribe(config)` gives you fully typed accessors per content type.

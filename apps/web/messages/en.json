@@ -1,0 +1,19 @@
+{
+  "Site": {
+    "tagline": "Typed MDX CMS",
+    "home": "Home",
+    "examples": "Examples",
+    "gettingStarted": "Getting started",
+    "install": "Install",
+    "viewExamples": "View examples →",
+    "viewGettingStarted": "Getting started →",
+    "github": "GitHub",
+    "examplesTitle": "Examples",
+    "examplesLead": "Copy-paste snippets for common scribe-crm workflows.",
+    "languageLabel": "Language",
+    "footerNpm": "npm",
+    "footerGithub": "GitHub",
+    "madeBy": "Made by",
+    "genlookTagline": "AI virtual try-on for e-commerce"
+  }
+}

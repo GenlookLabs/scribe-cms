@@ -1,0 +1,38 @@
+---
+title: "Config"
+caption: "Define content types with Zod — translatable, structural, and relation fields."
+language: ts
+order: 2
+---
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { z } from "zod";
+import { defineConfig, defineContentType, field } from "scribe-crm";
+
+const blogSchema = z.object({
+  title: field.translatable(z.string().min(1)),
+  description: field.translatable(z.string().min(50)),
+  author: field.relation("author"),
+});
+
+const authorSchema = z.object({
+  name: field.structural(z.string().min(1)),
+});
+
+export default defineConfig({
+  rootDir: path.dirname(fileURLToPath(import.meta.url)),
+  locales: ["en", "fr"],
+  types: [
+    defineContentType({
+      id: "blog",
+      path: "/blog/{slug}",
+      schema: blogSchema,
+      slugStrategy: "localized",
+    }),
+    defineContentType({
+      id: "author",
+      contentDir: "authors",
+      schema: authorSchema,
+    }),
+  ],
+});
