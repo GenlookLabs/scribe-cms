@@ -8,17 +8,8 @@ const pkgRoot = path.dirname(fileURLToPath(new URL("../package.json", import.met
 const builtCli = path.join(pkgRoot, "dist/cli/index.js");
 
 if (!fs.existsSync(builtCli)) {
-  const ensureBuilt = path.join(pkgRoot, "bin/ensure-built.mjs");
-  const build = spawnSync(process.execPath, [ensureBuilt], {
-    stdio: "inherit",
-    cwd: pkgRoot,
-  });
-  if (build.status !== 0 || !fs.existsSync(builtCli)) {
-    console.error(
-      "scribe-cms could not run: dist/ is missing. Reinstall dependencies or run: pnpm --filter scribe-cms build",
-    );
-    process.exit(1);
-  }
+  console.error("scribe-cms is not built.");
+  process.exit(1);
 }
 
 const result = spawnSync(process.execPath, [builtCli, ...process.argv.slice(2)], {

@@ -12,8 +12,19 @@
   },
   "type": "module",
   "license": "MIT",
-  "keywords": ["cms", "mdx", "i18n", "zod", "content", "translation"],
-  "files": ["dist", "bin", "README.md"],
+  "keywords": [
+    "cms",
+    "mdx",
+    "i18n",
+    "zod",
+    "content",
+    "translation"
+  ],
+  "files": [
+    "dist",
+    "bin",
+    "README.md"
+  ],
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
@@ -38,7 +49,6 @@
   },
   "scripts": {
     "build": "tsup && tsc -p tsconfig.dts.json",
-    "postinstall": "node ./bin/ensure-built.mjs",
     "dev": "tsup --watch",
     "clean": "rm -rf dist",
     "test": "pnpm build && node --import tsx --test \"src/**/*.test.ts\"",
