@@ -6,10 +6,10 @@ import { computePageEnHash } from "../src/hash/page-hash.js";
 import { getTranslatablePayload, readEnDocument } from "../src/loader/create-loader.js";
 import { openStore } from "../src/storage/sqlite.js";
 import {
+  getEnSnapshot,
   getTranslation,
-  listRevisions,
   listTranslationsForLocale,
-  type RevisionRow,
+  type EnSnapshotRow,
 } from "../src/storage/translations.js";
 import { buildWorklist } from "../src/translate/worklist.js";
 
@@ -121,44 +121,41 @@ function renderFrontmatterTable(
   </table>`;
 }
 
-function renderRevisionSnapshot(revision: RevisionRow): string {
-  if (revision.frontmatter_json && revision.body) {
-    let frontmatter: Record<string, unknown> = {};
-    try {
-      frontmatter = JSON.parse(revision.frontmatter_json) as Record<string, unknown>;
-    } catch {
-      frontmatter = {};
-    }
-    const fmRows = flattenFrontmatter(frontmatter)
-      .map(
-        (row) =>
-          `<tr><td class="k">${escapeHtml(row.key)}</td><td class="v">${escapeHtml(row.value)}</td></tr>`,
-      )
-      .join("");
-    return `<table class="kv"><tbody>${fmRows}</tbody></table>
-      <pre class="code">${escapeHtml(revision.body)}</pre>`;
+function renderEnSnapshotPreview(snapshot: EnSnapshotRow): string {
+  let frontmatter: Record<string, unknown> = {};
+  try {
+    frontmatter = JSON.parse(snapshot.frontmatter_json) as Record<string, unknown>;
+  } catch {
+    frontmatter = {};
   }
-  return `<p class="dim">${escapeHtml(revision.body_preview ?? "(no snapshot)")}</p>`;
-}
-
-function renderRevisionTimeline(revisions: RevisionRow[]): string {
-  if (revisions.length === 0) {
-    return `<p class="dim">No history.</p>`;
-  }
-  const items = revisions
+  const fmRows = flattenFrontmatter(frontmatter)
     .map(
-      (row) => `<tr>
-        <td class="dim">${escapeHtml(row.created_at.slice(0, 19))}</td>
-        <td>${escapeHtml(row.revision_kind)}</td>
-        <td class="dim">${row.model ? escapeHtml(row.model) : "—"}</td>
-        <td class="dim mono">${escapeHtml(row.en_hash.slice(0, 8))}</td>
-        <td><details><summary>view</summary>${renderRevisionSnapshot(row)}</details></td>
-      </tr>`,
+      (row) =>
+        `<tr><td class="k">${escapeHtml(row.key)}</td><td class="v">${escapeHtml(row.value)}</td></tr>`,
     )
     .join("");
-  return `<table class="data"><thead><tr>
-    <th>When</th><th>Kind</th><th>Model</th><th>Hash</th><th></th>
-  </tr></thead><tbody>${items}</tbody></table>`;
+  return `<table class="kv"><tbody>${fmRows}</tbody></table>
+    <pre class="code">${escapeHtml(snapshot.body)}</pre>`;
+}
+
+function renderTranslationSnapshotPanel(
+  snapshot: EnSnapshotRow | undefined,
+  currentEnHash?: string,
+): string {
+  if (!snapshot) {
+    return `<p class="dim">No EN snapshot linked to this translation.</p>`;
+  }
+  const staleNote =
+    currentEnHash && currentEnHash !== snapshot.en_hash
+      ? `<p class="dim">Current EN hash differs from snapshot (${escapeHtml(currentEnHash.slice(0, 12))} vs ${escapeHtml(snapshot.en_hash.slice(0, 12))}).</p>`
+      : "";
+  return `<dl class="meta">
+    <dt>snapshot</dt><dd>#${snapshot.id}</dd>
+    <dt>captured</dt><dd>${escapeHtml(snapshot.created_at.slice(0, 19))}</dd>
+    <dt>en_hash</dt><dd class="mono">${escapeHtml(snapshot.en_hash.slice(0, 12))}</dd>
+  </dl>
+  ${staleNote}
+  <details><summary>EN source at translation time</summary>${renderEnSnapshotPreview(snapshot)}</details>`;
 }
 
 function renderLayout(
@@ -516,10 +513,13 @@ export async function startStudio(
           <dt>slug</dt><dd>${escapeHtml(translation.slug)}</dd>
           <dt>en_hash</dt><dd>${escapeHtml(currentEnHash?.slice(0, 12) ?? "—")} / ${escapeHtml(storedEnHash?.slice(0, 12) ?? "—")}</dd>
         </dl>`;
-        const revisions = listRevisions(db, typeId, enSlug, locale);
+        const snapshot =
+          translation.snapshot_id != null
+            ? getEnSnapshot(db, translation.snapshot_id)
+            : undefined;
         historyPanel = `<div class="section">
-          <div class="section-head">History</div>
-          <div class="section-body">${renderRevisionTimeline(revisions)}</div>
+          <div class="section-head">EN snapshot</div>
+          <div class="section-body">${renderTranslationSnapshotPanel(snapshot, currentEnHash)}</div>
         </div>`;
       } else {
         contentPanel = `<p class="dim" style="padding:12px">No translation for ${escapeHtml(locale)}.</p>`;

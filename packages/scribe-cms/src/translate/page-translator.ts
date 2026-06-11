@@ -1,7 +1,7 @@
 import type { ScribeConfig, ScribeDocument } from "../core/types.js";
 import { computePageEnHash } from "../hash/page-hash.js";
 import { getTranslatablePayload, readEnDocument } from "../loader/create-loader.js";
-import { recordRevision } from "../history/record-revision.js";
+import { recordEnSnapshot } from "../history/record-snapshot.js";
 import { openStore } from "../storage/sqlite.js";
 import { getTranslation, upsertTranslation } from "../storage/translations.js";
 import { translatePageWithGemini } from "./gemini-client.js";
@@ -186,6 +186,17 @@ export async function translatePage(
     }
 
     const writeDb = openStore(config, "readwrite");
+    const snapshotId = recordEnSnapshot(
+      config,
+      {
+        contentType: type.id,
+        enSlug: item.enSlug,
+        enHash: currentEnHash,
+        frontmatter: payload.frontmatter,
+        body: payload.body,
+      },
+      writeDb,
+    );
     upsertTranslation(writeDb, {
       contentType: type.id,
       enSlug: item.enSlug,
@@ -196,19 +207,9 @@ export async function translatePage(
       enHash: currentEnHash,
       translatedAt: new Date().toISOString(),
       model: result.model,
+      snapshotId,
     });
     writeDb.close();
-
-    recordRevision(config, {
-      contentType: type.id,
-      enSlug: item.enSlug,
-      locale: item.locale,
-      revisionKind: "translation",
-      enHash: currentEnHash,
-      body: result.parsed.body,
-      frontmatter: validated.frontmatter,
-      model: result.model,
-    });
 
     const estimatedCostUsd = estimateTranslationCostUsd(
       normalizeGeminiDisplayName(result.model),

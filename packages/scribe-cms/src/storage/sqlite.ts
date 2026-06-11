@@ -3,7 +3,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import type { ScribeConfig } from "../core/types.js";
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 const MIGRATIONS: string[] = [
   `CREATE TABLE IF NOT EXISTS meta (
@@ -24,20 +24,6 @@ const MIGRATIONS: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_translations_type_locale
     ON translations(content_type, locale)`,
-  `CREATE TABLE IF NOT EXISTS revisions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    content_type TEXT NOT NULL,
-    en_slug TEXT NOT NULL,
-    locale TEXT,
-    revision_kind TEXT NOT NULL,
-    en_hash TEXT NOT NULL,
-    body_hash TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    model TEXT,
-    body_preview TEXT
-  )`,
-  `CREATE INDEX IF NOT EXISTS idx_revisions_lookup
-    ON revisions(content_type, en_slug, locale, created_at DESC)`,
   `CREATE TABLE IF NOT EXISTS slug_aliases (
     content_type TEXT NOT NULL,
     canonical_en_slug TEXT NOT NULL,
@@ -55,6 +41,18 @@ const MIGRATIONS: string[] = [
     captured_at TEXT NOT NULL,
     PRIMARY KEY (content_type, alias_en_slug, locale)
   )`,
+  `CREATE TABLE IF NOT EXISTS en_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content_type TEXT NOT NULL,
+    en_slug TEXT NOT NULL,
+    en_hash TEXT NOT NULL,
+    frontmatter_json TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (content_type, en_slug, en_hash)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_en_snapshots_lookup
+    ON en_snapshots(content_type, en_slug, created_at DESC)`,
 ];
 
 export type SqliteMode = "readonly" | "readwrite";
@@ -89,14 +87,26 @@ function addColumnIfMissing(
   }
 }
 
+function readSchemaVersion(db: Database.Database): number {
+  const row = db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get() as
+    | { value: string }
+    | undefined;
+  return row ? Number.parseInt(row.value, 10) || 0 : 0;
+}
+
 function migrate(db: Database.Database): void {
+  const previousVersion = readSchemaVersion(db);
+
   for (const sql of MIGRATIONS) {
     db.exec(sql);
   }
-  // v3: store a full content snapshot (translated frontmatter + body) on each
-  // revision so history can show — and diff — past versions, not just a preview.
-  addColumnIfMissing(db, "revisions", "frontmatter_json", "TEXT");
-  addColumnIfMissing(db, "revisions", "body", "TEXT");
+
+  if (previousVersion < 4) {
+    db.exec(`DROP TABLE IF EXISTS revisions`);
+  }
+
+  addColumnIfMissing(db, "translations", "snapshot_id", "INTEGER");
+
   db.prepare(
     `INSERT INTO meta(key, value) VALUES('schema_version', ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`,

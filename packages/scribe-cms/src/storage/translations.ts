@@ -10,6 +10,7 @@ export interface TranslationRow {
   en_hash: string;
   translated_at: string;
   model: string;
+  snapshot_id: number | null;
 }
 
 export interface TranslationInput {
@@ -22,51 +23,95 @@ export interface TranslationInput {
   enHash: string;
   translatedAt: string;
   model: string;
+  snapshotId: number;
 }
 
-export interface RevisionInput {
+export interface EnSnapshotInput {
   contentType: string;
   enSlug: string;
-  locale: string | null;
-  revisionKind: "translation" | "en_edit_detected" | "snapshot";
   enHash: string;
-  bodyHash: string;
+  frontmatter: Record<string, unknown>;
+  body: string;
   createdAt: string;
-  model?: string;
-  bodyPreview?: string;
-  /** Full translated frontmatter snapshot (JSON) at revision time. */
-  frontmatterJson?: string | null;
-  /** Full translated body snapshot at revision time. */
-  body?: string | null;
 }
 
-export interface RevisionRow {
+export interface EnSnapshotRow {
   id: number;
   content_type: string;
   en_slug: string;
-  locale: string | null;
-  revision_kind: string;
   en_hash: string;
-  body_hash: string;
+  frontmatter_json: string;
+  body: string;
   created_at: string;
-  model: string | null;
-  body_preview: string | null;
-  frontmatter_json: string | null;
-  body: string | null;
+}
+
+export interface EnSnapshotWithLocales extends EnSnapshotRow {
+  locales: string;
+}
+
+export function getOrCreateEnSnapshot(db: Database.Database, input: EnSnapshotInput): number {
+  db.prepare(
+    `INSERT OR IGNORE INTO en_snapshots (
+      content_type, en_slug, en_hash, frontmatter_json, body, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(
+    input.contentType,
+    input.enSlug,
+    input.enHash,
+    JSON.stringify(input.frontmatter),
+    input.body,
+    input.createdAt,
+  );
+
+  const row = db
+    .prepare(
+      `SELECT id FROM en_snapshots
+       WHERE content_type = ? AND en_slug = ? AND en_hash = ?`,
+    )
+    .get(input.contentType, input.enSlug, input.enHash) as { id: number };
+
+  return row.id;
+}
+
+export function getEnSnapshot(
+  db: Database.Database,
+  snapshotId: number,
+): EnSnapshotRow | undefined {
+  return db
+    .prepare(`SELECT * FROM en_snapshots WHERE id = ?`)
+    .get(snapshotId) as EnSnapshotRow | undefined;
+}
+
+export function listEnSnapshotsForEnSlug(
+  db: Database.Database,
+  contentType: string,
+  enSlug: string,
+): EnSnapshotWithLocales[] {
+  return db
+    .prepare(
+      `SELECT s.*, GROUP_CONCAT(t.locale) AS locales
+       FROM en_snapshots s
+       LEFT JOIN translations t ON t.snapshot_id = s.id
+       WHERE s.content_type = ? AND s.en_slug = ?
+       GROUP BY s.id
+       ORDER BY s.created_at DESC, s.id DESC`,
+    )
+    .all(contentType, enSlug) as EnSnapshotWithLocales[];
 }
 
 export function upsertTranslation(db: Database.Database, input: TranslationInput): void {
   db.prepare(
     `INSERT INTO translations (
-      content_type, en_slug, locale, slug, frontmatter_json, body, en_hash, translated_at, model
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      content_type, en_slug, locale, slug, frontmatter_json, body, en_hash, translated_at, model, snapshot_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(content_type, en_slug, locale) DO UPDATE SET
       slug = excluded.slug,
       frontmatter_json = excluded.frontmatter_json,
       body = excluded.body,
       en_hash = excluded.en_hash,
       translated_at = excluded.translated_at,
-      model = excluded.model`,
+      model = excluded.model,
+      snapshot_id = excluded.snapshot_id`,
   ).run(
     input.contentType,
     input.enSlug,
@@ -77,6 +122,7 @@ export function upsertTranslation(db: Database.Database, input: TranslationInput
     input.enHash,
     input.translatedAt,
     input.model,
+    input.snapshotId,
   );
 }
 
@@ -126,55 +172,6 @@ export function listTranslationsForLocale(
 
 export function bulkLoadTranslations(db: Database.Database): TranslationRow[] {
   return db.prepare(`SELECT * FROM translations ORDER BY content_type, en_slug, locale`).all() as TranslationRow[];
-}
-
-export function appendRevision(db: Database.Database, input: RevisionInput): number {
-  const result = db
-    .prepare(
-      `INSERT INTO revisions (
-        content_type, en_slug, locale, revision_kind, en_hash, body_hash, created_at,
-        model, body_preview, frontmatter_json, body
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      input.contentType,
-      input.enSlug,
-      input.locale,
-      input.revisionKind,
-      input.enHash,
-      input.bodyHash,
-      input.createdAt,
-      input.model ?? null,
-      input.bodyPreview ?? null,
-      input.frontmatterJson ?? null,
-      input.body ?? null,
-    );
-  return Number(result.lastInsertRowid);
-}
-
-/** List revision history for an EN slug, optionally filtered by locale. */
-export function listRevisions(
-  db: Database.Database,
-  contentType: string,
-  enSlug: string,
-  locale?: string,
-): RevisionRow[] {
-  if (locale) {
-    return db
-      .prepare(
-        `SELECT * FROM revisions
-         WHERE content_type = ? AND en_slug = ? AND locale = ?
-         ORDER BY created_at DESC, id DESC`,
-      )
-      .all(contentType, enSlug, locale) as RevisionRow[];
-  }
-  return db
-    .prepare(
-      `SELECT * FROM revisions
-       WHERE content_type = ? AND en_slug = ?
-       ORDER BY created_at DESC, id DESC`,
-    )
-    .all(contentType, enSlug) as RevisionRow[];
 }
 
 export function countTranslations(db: Database.Database): number {

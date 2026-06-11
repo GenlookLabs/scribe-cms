@@ -6,7 +6,7 @@ import {
   validateProject,
   writeStaticRawExports,
 } from "../src/index.js";
-import { listRevisions } from "../src/storage/translations.js";
+import { listEnSnapshotsForEnSlug } from "../src/storage/translations.js";
 import { loadEnvFromCwd } from "../src/config/load-env.js";
 import { buildWorklist, resolveLocalesFromPreset, type TranslationWorklistStrategy } from "../src/translate/worklist.js";
 import { startStudio } from "../studio/server.js";
@@ -153,7 +153,7 @@ Commands:
   validate               Validate EN files and sqlite consistency
   export-static          Write raw MDX files for static hosting
   translate              Translate stale/missing locale pages
-  history <type> <slug>  Show revision timeline
+  history <type> <slug>  Show EN snapshot timeline
   studio                 Start read-only local studio
   version                Print scribe-cms version
 
@@ -265,11 +265,13 @@ Translate flags:
       }
       const { openStore } = await import("../src/storage/sqlite.js");
       const db = openStore(config, "readonly");
-      const rows = listRevisions(db, typeId, enSlug, locale);
+      const rows = listEnSnapshotsForEnSlug(db, typeId, enSlug);
       db.close();
       for (const row of rows) {
+        const locales = row.locales ?? "";
+        if (locale && !locales.split(",").includes(locale)) continue;
         console.log(
-          `${row.created_at} ${row.revision_kind} locale=${row.locale ?? "en"} en_hash=${row.en_hash.slice(0, 8)} body_hash=${row.body_hash.slice(0, 8)}`,
+          `${row.created_at} snapshot=#${row.id} en_hash=${row.en_hash.slice(0, 8)} locales=${locales || "—"}`,
         );
       }
       break;
