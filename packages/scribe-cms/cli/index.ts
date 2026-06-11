@@ -2,7 +2,7 @@
 import { createProject, loadConfigSync, translateWorklist, validateProject } from "../src/index.js";
 import { listRevisions } from "../src/storage/translations.js";
 import { loadEnvFromCwd } from "../src/config/load-env.js";
-import { buildWorklist, resolveLocalesFromPreset } from "../src/translate/worklist.js";
+import { buildWorklist, resolveLocalesFromPreset, type TranslationWorklistStrategy } from "../src/translate/worklist.js";
 import { startStudio } from "../studio/server.js";
 import { promptTranslateSelection } from "./prompt-translate.js";
 import { createTranslateProgressReporter } from "./translate-progress.js";
@@ -20,6 +20,7 @@ interface CliOptions {
   port?: number;
   concurrency?: number;
   noProgress?: boolean;
+  strategy?: TranslationWorklistStrategy;
 }
 
 function parseArgs(argv: string[]): { command: string; options: CliOptions; rest: string[] } {
@@ -87,6 +88,15 @@ function parseArgs(argv: string[]): { command: string; options: CliOptions; rest
       i++;
       continue;
     }
+    if (arg === "--strategy") {
+      const value = argv[++i];
+      if (value !== "all" && value !== "missing-only") {
+        throw new Error(`Unknown strategy: ${value} (expected all or missing-only)`);
+      }
+      options.strategy = value;
+      i++;
+      continue;
+    }
     if (arg.startsWith("--")) {
       throw new Error(`Unknown flag: ${arg}`);
     }
@@ -128,6 +138,7 @@ Translate flags:
   --concurrency <n>      Parallel translations (default: 3)
   --dry-run              List work without writing
   --force                Re-translate even when hashes match
+  --strategy <mode>      all (default) or missing-only
   --no-progress          Plain line logging instead of live progress
 `);
     return;
@@ -165,12 +176,14 @@ Translate flags:
         type: options.type,
         preset: options.preset,
         locale: options.locale,
+        strategy: options.strategy,
       });
       const locales = resolveLocalesFromPreset(config, selection.preset, selection.locale);
       const worklist = buildWorklist(config, {
         contentType: selection.contentType,
         locales,
         enSlug: options.slug,
+        strategy: selection.strategy ?? "all",
       });
       if (worklist.length === 0) {
         console.log("Nothing to translate.");

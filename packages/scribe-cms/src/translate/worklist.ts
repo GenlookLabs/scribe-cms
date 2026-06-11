@@ -16,10 +16,14 @@ export interface TranslationWorkItem {
   storedEnHash?: string;
 }
 
+export type TranslationWorklistStrategy = "all" | "missing-only";
+
 export interface WorklistOptions {
   contentType?: string;
   locales?: string[];
   enSlug?: string;
+  /** Which pages to include: all stale/missing (default) or missing only. */
+  strategy?: TranslationWorklistStrategy;
 }
 
 function listEnSlugs(rootDir: string, contentDir: string): string[] {
@@ -77,6 +81,10 @@ export function buildWorklist(config: ScribeConfig, options: WorklistOptions = {
   }
 
   db.close();
+  const strategy = options.strategy ?? "all";
+  if (strategy === "missing-only") {
+    return items.filter((item) => item.reason === "missing");
+  }
   return items;
 }
 

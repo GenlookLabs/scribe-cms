@@ -2,10 +2,13 @@ import { CancelPromptError } from "@inquirer/core";
 import { checkbox, select } from "@inquirer/prompts";
 import type { ScribeConfig } from "../src/core/types.js";
 
+import type { TranslationWorklistStrategy } from "../src/translate/worklist.js";
+
 export interface TranslateSelection {
   contentType?: string;
   preset?: string;
   locale?: string[];
+  strategy?: TranslationWorklistStrategy;
 }
 
 function isInteractive(): boolean {
@@ -71,15 +74,34 @@ async function promptLocalePreset(config: ScribeConfig): Promise<Pick<TranslateS
   return choice ? { preset: choice } : {};
 }
 
+async function promptStrategy(): Promise<TranslationWorklistStrategy> {
+  return runPrompt(
+    select<TranslationWorklistStrategy>({
+      message: "Translation strategy",
+      choices: [
+        { name: "Stale and missing", value: "all" },
+        { name: "Missing only (skip stale)", value: "missing-only" },
+      ],
+      default: "all",
+    }),
+  );
+}
+
 /** Prompt for content type and locale preset when flags are omitted in a TTY. */
 export async function promptTranslateSelection(
   config: ScribeConfig,
-  flags: { type?: string; preset?: string; locale?: string[] },
+  flags: {
+    type?: string;
+    preset?: string;
+    locale?: string[];
+    strategy?: TranslationWorklistStrategy;
+  },
 ): Promise<TranslateSelection> {
   const selection: TranslateSelection = {
     contentType: flags.type,
     preset: flags.preset,
     locale: flags.locale,
+    strategy: flags.strategy,
   };
 
   if (!isInteractive()) return selection;
@@ -90,6 +112,10 @@ export async function promptTranslateSelection(
 
   if (!selection.preset && !selection.locale?.length) {
     Object.assign(selection, await promptLocalePreset(config));
+  }
+
+  if (!selection.strategy) {
+    selection.strategy = await promptStrategy();
   }
 
   return selection;
