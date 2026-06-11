@@ -195,6 +195,38 @@ const rules = buildAllContentRedirects(createProject(config), {
 // vercel.json, or your framework's equivalent as needed.
 ```
 
+## Static raw exports
+
+For LLM/crawler-friendly raw MDX files served as static assets (e.g.
+`/blog/my-post.mdx`), use the build-script entry:
+
+```ts
+// scripts/generate-static-mdx.mjs — run before the app build
+import { buildStaticRawExports, createProject, loadConfigSync } from "scribe-cms";
+
+const config = loadConfigSync();
+const project = createProject(config);
+const exports = buildStaticRawExports(project, { extension: ".mdx" });
+// [{ relativePath, urlPath, locale, typeId, enSlug, source }, ...]
+// relativePath: "blog/my-post.mdx" or "fr/glossary/term.mdx" (from public/ root)
+```
+
+Or use the CLI / write helper:
+
+```bash
+scribe export-static --out public
+```
+
+```ts
+import { writeStaticRawExports, createProject, loadConfigSync } from "scribe-cms";
+
+writeStaticRawExports(createProject(loadConfigSync()), { outDir: "public" });
+```
+
+`getStaticExportRoots(project)` returns managed directory roots to clean
+before writing (e.g. `blog/`, `fr/blog/`). Redirected (`redirect_to`) documents
+are excluded by default; `noindex` documents are included.
+
 ## Escape hatch
 
 `scribe.<type>.load()` returns the raw

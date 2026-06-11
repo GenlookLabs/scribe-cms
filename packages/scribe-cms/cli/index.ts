@@ -1,5 +1,11 @@
 #!/usr/bin/env node
-import { createProject, loadConfigSync, translateWorklist, validateProject } from "../src/index.js";
+import {
+  createProject,
+  loadConfigSync,
+  translateWorklist,
+  validateProject,
+  writeStaticRawExports,
+} from "../src/index.js";
 import { listRevisions } from "../src/storage/translations.js";
 import { loadEnvFromCwd } from "../src/config/load-env.js";
 import { buildWorklist, resolveLocalesFromPreset, type TranslationWorklistStrategy } from "../src/translate/worklist.js";
@@ -21,6 +27,8 @@ interface CliOptions {
   concurrency?: number;
   noProgress?: boolean;
   strategy?: TranslationWorklistStrategy;
+  out?: string;
+  extension?: string;
 }
 
 function parseArgs(argv: string[]): { command: string; options: CliOptions; rest: string[] } {
@@ -97,6 +105,16 @@ function parseArgs(argv: string[]): { command: string; options: CliOptions; rest
       i++;
       continue;
     }
+    if (arg === "--out") {
+      options.out = argv[++i];
+      i++;
+      continue;
+    }
+    if (arg === "--extension") {
+      options.extension = argv[++i];
+      i++;
+      continue;
+    }
     if (arg.startsWith("--")) {
       throw new Error(`Unknown flag: ${arg}`);
     }
@@ -125,9 +143,16 @@ async function main(): Promise<void> {
 Commands:
   status                 Show EN docs + translation counts
   validate               Validate EN files and sqlite consistency
+  export-static          Write raw MDX files for static hosting
   translate              Translate stale/missing locale pages
   history <type> <slug>  Show revision timeline
   studio                 Start read-only local studio
+
+Export-static flags:
+  --out <dir>            Output directory (default: public)
+  --extension <ext>      File extension (default: mdx)
+  --type <id>            Comma-separated content types (default: all routable)
+  --locale <code>...     Locales to export (default: all configured)
 
 Translate flags:
   --type <id>            Content type (interactive picker in a TTY when omitted)
@@ -169,6 +194,17 @@ Translate flags:
         );
       }
       if (!result.ok) process.exitCode = 1;
+      break;
+    }
+    case "export-static": {
+      const types = options.type?.split(",").map((t) => t.trim()).filter(Boolean);
+      const { written } = writeStaticRawExports(project, {
+        outDir: options.out,
+        extension: options.extension ? (`.${options.extension.replace(/^\./, "")}` as `.${string}`) : undefined,
+        types,
+        locales: options.locale,
+      });
+      console.log(`Wrote ${written} static raw exports to ${options.out ?? "public"}`);
       break;
     }
     case "translate": {

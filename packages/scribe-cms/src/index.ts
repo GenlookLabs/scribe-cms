@@ -64,3 +64,15 @@ export type {
   SitemapEntry,
   SitemapTypeDefaults,
 } from "./sitemap/types.js";
+export {
+  buildStaticRawExports,
+  exportDirSegment,
+  getStaticExportRoots,
+} from "./export/build-static-raw-exports.js";
+export type {
+  BuildStaticRawExportsOptions,
+  StaticRawExport,
+} from "./export/build-static-raw-exports.js";
+export { writeStaticRawExports } from "./export/write-static-raw-exports.js";
+export type { WriteStaticRawExportsOptions } from "./export/write-static-raw-exports.js";
+export { serializeMdx } from "./loader/parse-mdx.js";
