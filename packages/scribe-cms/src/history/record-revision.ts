@@ -14,6 +14,8 @@ export function recordRevision(
     enHash: string;
     body: string;
     model?: string;
+    /** Translated frontmatter to snapshot alongside the body. */
+    frontmatter?: Record<string, unknown>;
   },
 ): number {
   const db = openStore(config, "readwrite");
@@ -27,6 +29,8 @@ export function recordRevision(
     createdAt: new Date().toISOString(),
     model: input.model,
     bodyPreview: input.body.slice(0, 200),
+    frontmatterJson: input.frontmatter ? JSON.stringify(input.frontmatter) : null,
+    body: input.body,
   });
   db.close();
   return id;

@@ -37,6 +37,7 @@ export async function translatePageWithGemini(input: {
   prompt: string;
   model?: string;
   apiKey?: string;
+  responseSchema?: Record<string, unknown>;
 }): Promise<GeminiTranslationResult> {
   const apiKey = input.apiKey ?? process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -53,6 +54,7 @@ export async function translatePageWithGemini(input: {
     contents: input.prompt,
     config: {
       responseMimeType: "application/json",
+      ...(input.responseSchema ? { responseSchema: input.responseSchema } : {}),
     },
   });
 

@@ -1,4 +1,4 @@
-import type { ScribeConfig } from "../core/types.js";
+import type { ScribeConfig, ScribeDocument } from "../core/types.js";
 import { computePageEnHash } from "../hash/page-hash.js";
 import { getTranslatablePayload, readEnDocument } from "../loader/create-loader.js";
 import { recordRevision } from "../history/record-revision.js";
@@ -8,7 +8,9 @@ import { translatePageWithGemini } from "./gemini-client.js";
 import { estimateTranslationCostUsd } from "./gemini-pricing.js";
 import { normalizeGeminiDisplayName } from "./gemini-models.js";
 import { buildPageTranslationPrompt } from "./prompts/translation-prompt.js";
+import { buildGeminiResponseSchema } from "./response-schema.js";
 import { resolveTranslateConfig } from "./resolve-translate-config.js";
+import { validateTranslatedFrontmatter } from "./validate-translation.js";
 import type { TranslationWorkItem } from "./worklist.js";
 
 export interface TranslatePageResult {
@@ -100,6 +102,15 @@ async function runPool<T>(
   await Promise.all(runners);
 }
 
+function resolveContextLabel(enDoc: ScribeDocument, enSlug: string): string {
+  const fm = enDoc.frontmatter as Record<string, unknown>;
+  for (const key of ["title", "name", "h1"]) {
+    const value = fm[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return enSlug;
+}
+
 /** Translate one locale page via Gemini and upsert into SQLite. */
 export async function translatePage(
   config: ScribeConfig,
@@ -142,8 +153,7 @@ export async function translatePage(
     const prompt = buildPageTranslationPrompt({
       resolved: resolvedTranslate,
       targetLocale: item.locale,
-      enTitle: String(enDoc.frontmatter.title ?? item.enSlug),
-      enDescription: String(enDoc.frontmatter.description ?? ""),
+      contextLabel: resolveContextLabel(enDoc, item.enSlug),
       translatableFrontmatter: payload.frontmatter,
       enBody: payload.body,
       slugStrategy: type.slugStrategy,
@@ -158,14 +168,22 @@ export async function translatePage(
       };
     }
 
+    const responseSchema = buildGeminiResponseSchema(type.schema, type.slugStrategy);
+
     const result = await translatePageWithGemini({
       prompt,
       model,
+      responseSchema: responseSchema ?? undefined,
     });
     const slug =
       type.slugStrategy === "localized"
         ? (result.parsed.slug ?? existing?.slug ?? item.enSlug)
         : item.enSlug;
+
+    const validated = validateTranslatedFrontmatter(enDoc, result.parsed.frontmatter, type.schema);
+    if (!validated.ok) {
+      throw new Error(`Translation validation failed: ${validated.error}`);
+    }
 
     const writeDb = openStore(config, "readwrite");
     upsertTranslation(writeDb, {
@@ -173,7 +191,7 @@ export async function translatePage(
       enSlug: item.enSlug,
       locale: item.locale,
       slug,
-      frontmatter: result.parsed.frontmatter,
+      frontmatter: validated.frontmatter,
       body: result.parsed.body,
       enHash: currentEnHash,
       translatedAt: new Date().toISOString(),
@@ -188,6 +206,7 @@ export async function translatePage(
       revisionKind: "translation",
       enHash: currentEnHash,
       body: result.parsed.body,
+      frontmatter: validated.frontmatter,
       model: result.model,
     });
 

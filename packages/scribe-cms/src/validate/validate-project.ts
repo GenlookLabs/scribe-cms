@@ -122,6 +122,7 @@ export function validateProject(config: ScribeConfig): ValidateResult {
             revisionKind: "en_edit_detected",
             enHash: currentEnHash,
             body: row.body,
+            frontmatter: JSON.parse(row.frontmatter_json) as Record<string, unknown>,
           });
         }
 

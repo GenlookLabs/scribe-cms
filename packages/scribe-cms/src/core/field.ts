@@ -185,3 +185,21 @@ export function unwrapSchema(schema: Zod.ZodTypeAny): Zod.ZodTypeAny {
   }
   return current;
 }
+
+/** Strip optional/default/nullable wrappers only — preserves arrays and objects. */
+export function peelOptionalWrappers(schema: Zod.ZodTypeAny): Zod.ZodTypeAny {
+  let current: Zod.ZodTypeAny = schema;
+  for (let i = 0; i < 8; i++) {
+    const type = (current as Zod.ZodTypeAny & { _def?: { type?: string } })._def?.type;
+    if (type === "optional" || type === "nullable") {
+      current = (current as Zod.ZodOptional<Zod.ZodTypeAny>).unwrap();
+      continue;
+    }
+    if (type === "default") {
+      current = (current as Zod.ZodDefault<Zod.ZodTypeAny>).removeDefault();
+      continue;
+    }
+    break;
+  }
+  return current;
+}

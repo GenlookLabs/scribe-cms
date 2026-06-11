@@ -34,6 +34,10 @@ export interface RevisionInput {
   createdAt: string;
   model?: string;
   bodyPreview?: string;
+  /** Full translated frontmatter snapshot (JSON) at revision time. */
+  frontmatterJson?: string | null;
+  /** Full translated body snapshot at revision time. */
+  body?: string | null;
 }
 
 export interface RevisionRow {
@@ -47,6 +51,8 @@ export interface RevisionRow {
   created_at: string;
   model: string | null;
   body_preview: string | null;
+  frontmatter_json: string | null;
+  body: string | null;
 }
 
 export function upsertTranslation(db: Database.Database, input: TranslationInput): void {
@@ -126,8 +132,9 @@ export function appendRevision(db: Database.Database, input: RevisionInput): num
   const result = db
     .prepare(
       `INSERT INTO revisions (
-        content_type, en_slug, locale, revision_kind, en_hash, body_hash, created_at, model, body_preview
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        content_type, en_slug, locale, revision_kind, en_hash, body_hash, created_at,
+        model, body_preview, frontmatter_json, body
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.contentType,
@@ -139,6 +146,8 @@ export function appendRevision(db: Database.Database, input: RevisionInput): num
       input.createdAt,
       input.model ?? null,
       input.bodyPreview ?? null,
+      input.frontmatterJson ?? null,
+      input.body ?? null,
     );
   return Number(result.lastInsertRowid);
 }

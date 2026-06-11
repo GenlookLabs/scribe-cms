@@ -3,7 +3,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import type { ScribeConfig } from "../core/types.js";
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const MIGRATIONS: string[] = [
   `CREATE TABLE IF NOT EXISTS meta (
@@ -77,10 +77,26 @@ export function openStore(config: ScribeConfig, mode: SqliteMode = "readwrite"):
   return db;
 }
 
+function addColumnIfMissing(
+  db: Database.Database,
+  table: string,
+  column: string,
+  ddlType: string,
+): void {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!columns.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddlType}`);
+  }
+}
+
 function migrate(db: Database.Database): void {
   for (const sql of MIGRATIONS) {
     db.exec(sql);
   }
+  // v3: store a full content snapshot (translated frontmatter + body) on each
+  // revision so history can show — and diff — past versions, not just a preview.
+  addColumnIfMissing(db, "revisions", "frontmatter_json", "TEXT");
+  addColumnIfMissing(db, "revisions", "body", "TEXT");
   db.prepare(
     `INSERT INTO meta(key, value) VALUES('schema_version', ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`,

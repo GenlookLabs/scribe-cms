@@ -31,8 +31,7 @@ export function defaultLocalizationPrompt(localeName: string, locale: string): s
 export function buildPageTranslationPrompt(input: {
   resolved: ResolvedTranslateConfig;
   targetLocale: string;
-  enTitle: string;
-  enDescription: string;
+  contextLabel?: string;
   translatableFrontmatter: Record<string, unknown>;
   enBody: string;
   slugStrategy: SlugStrategy;
@@ -46,6 +45,7 @@ export function buildPageTranslationPrompt(input: {
     prompt,
     "",
     ...(input.resolved.context ? ["## Context", input.resolved.context, ""] : []),
+    ...(input.contextLabel ? [`Document: ${input.contextLabel}`, ""] : []),
     "## Rules",
     ...input.resolved.rules.map((rule) => `- ${rule}`),
     "",
@@ -54,10 +54,6 @@ export function buildPageTranslationPrompt(input: {
     input.slugStrategy === "localized"
       ? '`frontmatter` (object with translated frontmatter fields), `body` (string, full MDX body), `slug` (string).'
       : "`frontmatter` (object), `body` (string).",
-    "",
-    "## EN metadata",
-    `title: ${input.enTitle}`,
-    `description: ${input.enDescription}`,
     "",
     "## EN translatable frontmatter (JSON)",
     JSON.stringify(input.translatableFrontmatter, null, 2),

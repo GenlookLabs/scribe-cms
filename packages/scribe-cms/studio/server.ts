@@ -1,46 +1,362 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import type { ScribeProject } from "../src/core/types.js";
+import type { ContentTypeRuntime, ScribeConfig, ScribeProject } from "../src/core/types.js";
+import { introspectSchema, mergeStructuralOntoLocale } from "../src/core/introspect-schema.js";
 import { computePageEnHash } from "../src/hash/page-hash.js";
 import { getTranslatablePayload, readEnDocument } from "../src/loader/create-loader.js";
 import { openStore } from "../src/storage/sqlite.js";
-import { listRevisions, listTranslationsForType } from "../src/storage/translations.js";
+import {
+  getTranslation,
+  listRevisions,
+  listTranslationsForLocale,
+  type RevisionRow,
+} from "../src/storage/translations.js";
 import { buildWorklist } from "../src/translate/worklist.js";
 
-function renderLayout(title: string, body: string): string {
+type DocStatus = "source" | "up-to-date" | "stale" | "missing";
+
+interface DocumentStatusResult {
+  status: DocStatus;
+  currentEnHash?: string;
+  storedEnHash?: string;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function encodePathSegment(value: string): string {
+  return encodeURIComponent(value);
+}
+
+function statusDot(status: DocStatus): string {
+  const labels: Record<DocStatus, string> = {
+    source: "en",
+    "up-to-date": "ok",
+    stale: "stale",
+    missing: "—",
+  };
+  return `<span class="status" title="${status}"><span class="dot dot-${status}"></span>${labels[status]}</span>`;
+}
+
+function documentStatus(
+  config: ScribeConfig,
+  db: ReturnType<typeof openStore>,
+  type: ContentTypeRuntime,
+  enSlug: string,
+  locale: string,
+): DocumentStatusResult {
+  if (locale === config.defaultLocale) {
+    return { status: "source" };
+  }
+  const enDoc = readEnDocument(config, type.config, enSlug);
+  if (!enDoc) {
+    return { status: "missing" };
+  }
+  const payload = getTranslatablePayload(enDoc, type.config);
+  const currentEnHash = computePageEnHash(payload.frontmatter, payload.body);
+  const row = getTranslation(db, type.id, enSlug, locale);
+  if (!row) {
+    return { status: "missing", currentEnHash };
+  }
+  if (row.en_hash !== currentEnHash) {
+    return { status: "stale", currentEnHash, storedEnHash: row.en_hash };
+  }
+  return { status: "up-to-date", currentEnHash, storedEnHash: row.en_hash };
+}
+
+function flattenFrontmatter(
+  data: Record<string, unknown>,
+  prefix = "",
+): Array<{ key: string; value: string }> {
+  const rows: Array<{ key: string; value: string }> = [];
+  for (const [key, value] of Object.entries(data)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+      rows.push(...flattenFrontmatter(value as Record<string, unknown>, fullKey));
+    } else {
+      const display =
+        typeof value === "string"
+          ? value
+          : value === undefined
+            ? ""
+            : JSON.stringify(value, null, 2);
+      rows.push({ key: fullKey, value: display });
+    }
+  }
+  return rows;
+}
+
+function translatableKeySet(schema: ContentTypeRuntime["config"]["schema"]): Set<string> {
+  return new Set(
+    introspectSchema(schema)
+      .filter((field) => field.kind === "translatable")
+      .map((field) => field.path.join(".")),
+  );
+}
+
+function renderFrontmatterTable(
+  frontmatter: Record<string, unknown>,
+  schema: ContentTypeRuntime["config"]["schema"],
+): string {
+  const translatable = translatableKeySet(schema);
+  const rows = flattenFrontmatter(frontmatter)
+    .map((row) => {
+      const flag = translatable.has(row.key)
+        ? `<span class="flag t" title="Translatable">T</span>`
+        : `<span class="flag s" title="Structural">S</span>`;
+      return `<tr>
+        <td class="k">${flag}${escapeHtml(row.key)}</td>
+        <td class="v">${escapeHtml(row.value)}</td>
+      </tr>`;
+    })
+    .join("");
+  return `<table class="kv">
+    <tbody>${rows || `<tr><td colspan="2" class="dim">—</td></tr>`}</tbody>
+  </table>`;
+}
+
+function renderRevisionSnapshot(revision: RevisionRow): string {
+  if (revision.frontmatter_json && revision.body) {
+    let frontmatter: Record<string, unknown> = {};
+    try {
+      frontmatter = JSON.parse(revision.frontmatter_json) as Record<string, unknown>;
+    } catch {
+      frontmatter = {};
+    }
+    const fmRows = flattenFrontmatter(frontmatter)
+      .map(
+        (row) =>
+          `<tr><td class="k">${escapeHtml(row.key)}</td><td class="v">${escapeHtml(row.value)}</td></tr>`,
+      )
+      .join("");
+    return `<table class="kv"><tbody>${fmRows}</tbody></table>
+      <pre class="code">${escapeHtml(revision.body)}</pre>`;
+  }
+  return `<p class="dim">${escapeHtml(revision.body_preview ?? "(no snapshot)")}</p>`;
+}
+
+function renderRevisionTimeline(revisions: RevisionRow[]): string {
+  if (revisions.length === 0) {
+    return `<p class="dim">No history.</p>`;
+  }
+  const items = revisions
+    .map(
+      (row) => `<tr>
+        <td class="dim">${escapeHtml(row.created_at.slice(0, 19))}</td>
+        <td>${escapeHtml(row.revision_kind)}</td>
+        <td class="dim">${row.model ? escapeHtml(row.model) : "—"}</td>
+        <td class="dim mono">${escapeHtml(row.en_hash.slice(0, 8))}</td>
+        <td><details><summary>view</summary>${renderRevisionSnapshot(row)}</details></td>
+      </tr>`,
+    )
+    .join("");
+  return `<table class="data"><thead><tr>
+    <th>When</th><th>Kind</th><th>Model</th><th>Hash</th><th></th>
+  </tr></thead><tbody>${items}</tbody></table>`;
+}
+
+function renderLayout(
+  title: string,
+  body: string,
+  project: ScribeProject,
+  options: { activeTypeId?: string } = {},
+): string {
+  const typeLinks = project
+    .listTypes()
+    .map((type) => {
+      const active = type.id === options.activeTypeId ? " active" : "";
+      return `<a class="tree-item${active}" href="/type/${encodePathSegment(type.id)}">
+        <span class="tree-label">${escapeHtml(type.config.label)}</span>
+        <span class="tree-meta">${escapeHtml(type.id)}</span>
+      </a>`;
+    })
+    .join("");
+
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${title} — Scribe Studio</title>
+  <title>${escapeHtml(title)} — Scribe</title>
   <style>
-    body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; background: #0b0d10; color: #e8eaed; }
-    header { padding: 16px 24px; border-bottom: 1px solid #222; display: flex; gap: 16px; }
-    header a { color: #9ecbff; text-decoration: none; }
-    main { padding: 24px; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #333; padding: 8px 10px; text-align: left; vertical-align: top; }
-    th { background: #151922; }
-    .muted { color: #9aa0a6; }
-    .stale { color: #ffb4a2; }
-    .ok { color: #8ce99a; }
-    .card { background: #151922; border: 1px solid #333; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    :root {
+      --bg: #1e1e1e;
+      --sidebar: #252526;
+      --bar: #333333;
+      --panel: #1e1e1e;
+      --border: #3c3c3c;
+      --text: #cccccc;
+      --dim: #858585;
+      --accent: #3794ff;
+      --hover: #2a2d2e;
+      --active: #37373d;
+      --ok: #89d185;
+      --stale: #cca700;
+      --missing: #f48771;
+      --source: #75beff;
+      --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
+      --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --fs: 13px;
+      --fs-sm: 11px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font: var(--fs)/1.4 var(--ui); background: var(--bg); color: var(--text); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .app { display: flex; height: 100vh; overflow: hidden; }
+
+    /* activity bar */
+    .actbar {
+      width: 48px; flex-shrink: 0; background: var(--bar);
+      display: flex; flex-direction: column; align-items: center;
+      padding: 8px 0; gap: 4px; border-right: 1px solid var(--border);
+    }
+    .actbar a {
+      width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;
+      color: var(--dim); font-size: 18px; text-decoration: none; position: relative;
+    }
+    .actbar a:hover { color: var(--text); }
+    .actbar a.active { color: var(--text); }
+    .actbar a.active::before {
+      content: ""; position: absolute; left: 0; top: 8px; bottom: 8px;
+      width: 2px; background: var(--accent);
+    }
+
+    /* sidebar */
+    .sidebar {
+      width: 200px; flex-shrink: 0; background: var(--sidebar);
+      border-right: 1px solid var(--border); display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-head {
+      padding: 8px 12px; font-size: var(--fs-sm); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.04em; color: var(--dim);
+    }
+    .sidebar-body { flex: 1; overflow-y: auto; padding: 2px 0; }
+    .tree-item {
+      display: flex; flex-direction: column; padding: 3px 12px 3px 20px;
+      color: var(--text); text-decoration: none; line-height: 1.3;
+    }
+    .tree-item:hover { background: var(--hover); text-decoration: none; }
+    .tree-item.active { background: var(--active); }
+    .tree-label { font-size: var(--fs); }
+    .tree-meta { font-size: var(--fs-sm); color: var(--dim); }
+
+    /* main */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .toolbar {
+      display: flex; align-items: center; gap: 6px; padding: 0 12px;
+      height: 35px; background: var(--sidebar); border-bottom: 1px solid var(--border);
+      font-size: var(--fs-sm); color: var(--dim); flex-shrink: 0; overflow: hidden;
+    }
+    .toolbar a { color: var(--dim); }
+    .toolbar a:hover { color: var(--text); }
+    .toolbar .sep { color: var(--border); }
+    .content { flex: 1; overflow-y: auto; padding: 0; }
+
+    /* tabs (locale switcher) */
+    .tabs {
+      display: flex; background: var(--sidebar); border-bottom: 1px solid var(--border);
+      overflow-x: auto; flex-shrink: 0;
+    }
+    .tab {
+      display: flex; align-items: center; gap: 6px; padding: 6px 12px;
+      font-size: var(--fs-sm); color: var(--dim); border-right: 1px solid var(--border);
+      text-decoration: none; white-space: nowrap;
+    }
+    .tab:hover { background: var(--hover); color: var(--text); text-decoration: none; }
+    .tab.active {
+      background: var(--bg); color: var(--text);
+      border-bottom: 1px solid var(--bg); margin-bottom: -1px;
+    }
+
+    /* status dots */
+    .status { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-sm); color: var(--dim); }
+    .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .dot-source { background: var(--source); }
+    .dot-up-to-date { background: var(--ok); }
+    .dot-stale { background: var(--stale); }
+    .dot-missing { background: var(--missing); opacity: 0.7; }
+
+    /* sections */
+    .section { border-bottom: 1px solid var(--border); }
+    .section-head {
+      padding: 4px 12px; font-size: var(--fs-sm); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.04em; color: var(--dim);
+      background: var(--sidebar);
+    }
+    .section-body { padding: 0; }
+
+    /* tables */
+    table { border-collapse: collapse; width: 100%; font-size: var(--fs); }
+    .data th, .data td { padding: 2px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .data th { font-size: var(--fs-sm); font-weight: 600; color: var(--dim); background: var(--sidebar); height: 22px; }
+    .data tr:hover td { background: var(--hover); }
+    .data .mono { font-family: var(--mono); font-size: var(--fs-sm); }
+
+    /* key-value (frontmatter) */
+    .kv td { padding: 1px 12px; font-family: var(--mono); font-size: var(--fs-sm); vertical-align: top; border-bottom: 1px solid var(--border); }
+    .kv .k { width: 160px; color: #9cdcfe; white-space: nowrap; }
+    .kv .v { color: #ce9178; white-space: pre-wrap; word-break: break-word; }
+    .flag { font-size: 9px; font-weight: 700; margin-right: 4px; opacity: 0.5; }
+    .flag.t { color: var(--ok); }
+    .flag.s { color: var(--dim); }
+
+    /* code block */
+    .code {
+      margin: 0; padding: 8px 12px; font: var(--fs-sm)/1.5 var(--mono);
+      white-space: pre-wrap; word-break: break-word; color: var(--text);
+      background: var(--bg); border: none;
+    }
+
+    /* meta row */
+    .meta { display: flex; flex-wrap: wrap; font-size: var(--fs-sm); border-bottom: 1px solid var(--border); padding: 4px 0; }
+    .meta dt { padding: 0 4px 0 12px; color: var(--dim); }
+    .meta dt::after { content: ":"; }
+    .meta dd { padding: 0 12px 0 0; font-family: var(--mono); }
+
+    /* misc */
+    .dim { color: var(--dim); }
+    .page-title { padding: 8px 12px 4px; font-size: 14px; font-weight: 400; }
+    .page-sub { padding: 0 12px 8px; font-size: var(--fs-sm); color: var(--dim); }
+    details summary { cursor: pointer; color: var(--accent); font-size: var(--fs-sm); }
+    details[open] summary { margin-bottom: 4px; }
+    .tag { font-size: var(--fs-sm); color: var(--dim); margin-left: 6px; }
+    .tag-warn { color: var(--stale); }
+    .tag-err { color: var(--missing); }
   </style>
 </head>
 <body>
-  <header>
-    <strong>Scribe Studio</strong>
-    <a href="/">Browser</a>
-    <a href="/staleness">Staleness</a>
-    <a href="/history">History</a>
-  </header>
-  <main>${body}</main>
+  <div class="app">
+    <nav class="actbar">
+      <a href="/" title="Overview">⌂</a>
+      <a href="/staleness" title="Staleness">⚠</a>
+    </nav>
+    <aside class="sidebar">
+      <div class="sidebar-head">Types</div>
+      <div class="sidebar-body">${typeLinks || `<span class="dim" style="padding:8px 12px">—</span>`}</div>
+    </aside>
+    <div class="main">
+      <div class="content">${body}</div>
+    </div>
+  </div>
 </body>
 </html>`;
 }
 
-/** Start a local read-only Scribe studio (browser, staleness, history). */
+function docTitleFromFrontmatter(frontmatter: Record<string, unknown>, enSlug: string): string {
+  const title = frontmatter.title;
+  if (typeof title === "string" && title.trim()) return title;
+  return enSlug;
+}
+
+/** Start a local read-only Scribe studio (browser, staleness, document detail). */
 export async function startStudio(
   project: ScribeProject,
   options: { port?: number; host?: string } = {},
@@ -49,85 +365,216 @@ export async function startStudio(
   const config = project.config;
 
   app.get("/", (c) => {
-    const cards = project.listTypes().map((type) => {
-      const localeRows = config.locales
+    const db = openStore(config, "readonly");
+    const worklist = buildWorklist(config);
+    const rows = project.listTypes().map((type) => {
+      const enCount = type.list().length;
+      const localeCells = config.locales
+        .filter((locale) => locale !== config.defaultLocale)
         .map((locale) => {
-          const count = type.load().get(locale)?.bySlug.size ?? 0;
-          return `<li>${locale}: ${count}</li>`;
+          const translated = listTranslationsForLocale(db, type.id, locale).length;
+          const stale = worklist.filter(
+            (item) =>
+              item.contentType === type.id && item.locale === locale && item.reason === "stale",
+          ).length;
+          const missing = worklist.filter(
+            (item) =>
+              item.contentType === type.id && item.locale === locale && item.reason === "missing",
+          ).length;
+          const tags = [
+            stale ? `<span class="tag tag-warn">${stale}s</span>` : "",
+            missing ? `<span class="tag tag-err">${missing}m</span>` : "",
+          ].join("");
+          return `<td>${translated}${tags}</td>`;
         })
         .join("");
-      return `<div class="card"><h2>${type.config.label}</h2><ul>${localeRows}</ul></div>`;
+      return `<tr>
+        <td><a href="/type/${encodePathSegment(type.id)}">${escapeHtml(type.config.label)}</a></td>
+        <td class="dim">${escapeHtml(type.id)}</td>
+        <td>${enCount}</td>
+        ${localeCells}
+      </tr>`;
     });
-    return c.html(renderLayout("Browser", cards.join("")));
+    db.close();
+    const localeHeaders = config.locales
+      .filter((l) => l !== config.defaultLocale)
+      .map((l) => `<th>${escapeHtml(l)}</th>`)
+      .join("");
+    const html = `<div class="toolbar">Overview</div>
+      <table class="data">
+        <thead><tr><th>Type</th><th>ID</th><th>EN</th>${localeHeaders}</tr></thead>
+        <tbody>${rows.join("")}</tbody>
+      </table>`;
+    return c.html(renderLayout("Overview", html, project));
+  });
+
+  app.get("/type/:id", (c) => {
+    const typeId = c.req.param("id");
+    const type = project.getType(typeId);
+    if (!type) {
+      return c.html(renderLayout("Not found", `<div class="toolbar">Unknown type</div>`, project), 404);
+    }
+
+    const db = openStore(config, "readonly");
+    const locales = config.locales;
+    const headerCells = locales
+      .map((locale) => `<th>${escapeHtml(locale)}</th>`)
+      .join("");
+    const rows = type
+      .list()
+      .map((doc) => {
+        const title = docTitleFromFrontmatter(doc.frontmatter as Record<string, unknown>, doc.slug);
+        const statusCells = locales
+          .map((locale) => {
+            const { status } = documentStatus(config, db, type, doc.slug, locale);
+            return `<td>${statusDot(status)}</td>`;
+          })
+          .join("");
+        return `<tr>
+          <td class="mono"><a href="/type/${encodePathSegment(typeId)}/doc/${encodePathSegment(doc.slug)}">${escapeHtml(doc.slug)}</a></td>
+          <td>${escapeHtml(title)}</td>
+          ${statusCells}
+        </tr>`;
+      })
+      .join("");
+    db.close();
+
+    const html = `<div class="toolbar">
+        <a href="/">Overview</a><span class="sep">›</span>${escapeHtml(type.config.label)}
+      </div>
+      <table class="data">
+        <thead><tr><th>Slug</th><th>Title</th>${headerCells}</tr></thead>
+        <tbody>${rows || `<tr><td colspan="${2 + locales.length}" class="dim">No documents</td></tr>`}</tbody>
+      </table>`;
+    return c.html(renderLayout(type.config.label, html, project, { activeTypeId: typeId }));
+  });
+
+  app.get("/type/:id/doc/:enSlug", (c) => {
+    const typeId = c.req.param("id");
+    const enSlug = c.req.param("enSlug");
+    const locale = c.req.query("locale") ?? config.defaultLocale;
+    const showRaw = c.req.query("raw") === "1";
+    const type = project.getType(typeId);
+    if (!type) {
+      return c.html(renderLayout("Not found", `<div class="toolbar">Unknown type</div>`, project), 404);
+    }
+
+    const db = openStore(config, "readonly");
+    const enDoc = readEnDocument(config, type.config, enSlug);
+    if (!enDoc) {
+      db.close();
+      return c.html(
+        renderLayout("Not found", `<div class="toolbar">Not found</div><p class="dim" style="padding:12px">${escapeHtml(enSlug)}</p>`, project, {
+          activeTypeId: typeId,
+        }),
+        404,
+      );
+    }
+
+    const localeTabs = config.locales
+      .map((loc) => {
+        const { status } = documentStatus(config, db, type, enSlug, loc);
+        const active = loc === locale ? " active" : "";
+        const href = `/type/${encodePathSegment(typeId)}/doc/${encodePathSegment(enSlug)}?locale=${encodePathSegment(loc)}`;
+        return `<a class="tab${active}" href="${href}">${escapeHtml(loc)} ${statusDot(status)}</a>`;
+      })
+      .join("");
+
+    let contentPanel = "";
+    let metaPanel = "";
+    let historyPanel = "";
+
+    if (locale === config.defaultLocale) {
+      contentPanel = `<div class="section">
+        <div class="section-head">Frontmatter</div>
+        <div class="section-body">${renderFrontmatterTable(enDoc.frontmatter as Record<string, unknown>, type.config.schema)}</div>
+        <div class="section-head">Body</div>
+        <pre class="code">${escapeHtml(enDoc.content)}</pre>
+      </div>`;
+    } else {
+      const translation = getTranslation(db, typeId, enSlug, locale);
+      const { status, currentEnHash, storedEnHash } = documentStatus(config, db, type, enSlug, locale);
+
+      if (translation) {
+        const rawFrontmatter = JSON.parse(translation.frontmatter_json) as Record<string, unknown>;
+        const displayFrontmatter = showRaw
+          ? rawFrontmatter
+          : mergeStructuralOntoLocale(rawFrontmatter, enDoc.frontmatter as Record<string, unknown>, type.config.schema);
+        const rawToggle = showRaw
+          ? `<span class="dim"> · <a href="?locale=${encodePathSegment(locale)}">merged</a></span>`
+          : `<span class="dim"> · <a href="?locale=${encodePathSegment(locale)}&raw=1">raw</a></span>`;
+        contentPanel = `<div class="section">
+          <div class="section-head">Frontmatter${rawToggle}</div>
+          <div class="section-body">${renderFrontmatterTable(displayFrontmatter, type.config.schema)}</div>
+          <div class="section-head">Body</div>
+          <pre class="code">${escapeHtml(translation.body)}</pre>
+        </div>`;
+        metaPanel = `<dl class="meta">
+          <dt>status</dt><dd>${statusDot(status)}</dd>
+          <dt>model</dt><dd>${escapeHtml(translation.model)}</dd>
+          <dt>translated</dt><dd>${escapeHtml(translation.translated_at.slice(0, 19))}</dd>
+          <dt>slug</dt><dd>${escapeHtml(translation.slug)}</dd>
+          <dt>en_hash</dt><dd>${escapeHtml(currentEnHash?.slice(0, 12) ?? "—")} / ${escapeHtml(storedEnHash?.slice(0, 12) ?? "—")}</dd>
+        </dl>`;
+        const revisions = listRevisions(db, typeId, enSlug, locale);
+        historyPanel = `<div class="section">
+          <div class="section-head">History</div>
+          <div class="section-body">${renderRevisionTimeline(revisions)}</div>
+        </div>`;
+      } else {
+        contentPanel = `<p class="dim" style="padding:12px">No translation for ${escapeHtml(locale)}.</p>`;
+        metaPanel = `<dl class="meta"><dt>status</dt><dd>${statusDot(status)}</dd></dl>`;
+      }
+    }
+
+    db.close();
+
+    const title = docTitleFromFrontmatter(enDoc.frontmatter as Record<string, unknown>, enSlug);
+    const html = `<div class="toolbar">
+        <a href="/">Overview</a><span class="sep">›</span>
+        <a href="/type/${encodePathSegment(typeId)}">${escapeHtml(type.config.label)}</a><span class="sep">›</span>
+        <span>${escapeHtml(enSlug)}</span>
+      </div>
+      <div class="tabs">${localeTabs}</div>
+      ${metaPanel}
+      ${contentPanel}
+      ${historyPanel}`;
+
+    return c.html(renderLayout(title, html, project, { activeTypeId: typeId }));
   });
 
   app.get("/staleness", (c) => {
     const worklist = buildWorklist(config);
     const rows = worklist
       .slice(0, 500)
-      .map(
-        (item) =>
-          `<tr><td>${item.contentType}</td><td>${item.enSlug}</td><td>${item.locale}</td><td class="stale">${item.reason}</td></tr>`,
-      )
+      .map((item) => {
+        const href = `/type/${encodePathSegment(item.contentType)}/doc/${encodePathSegment(item.enSlug)}?locale=${encodePathSegment(item.locale)}`;
+        return `<tr>
+          <td>${escapeHtml(item.contentType)}</td>
+          <td class="mono"><a href="${href}">${escapeHtml(item.enSlug)}</a></td>
+          <td>${escapeHtml(item.locale)}</td>
+          <td>${statusDot(item.reason === "stale" ? "stale" : "missing")}</td>
+        </tr>`;
+      })
       .join("");
-    const html = `<h1>Translation staleness</h1><p class="muted">${worklist.length} stale/missing entries (showing up to 500)</p>
-      <table><thead><tr><th>Type</th><th>EN slug</th><th>Locale</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
-    return c.html(renderLayout("Staleness", html));
-  });
-
-  app.get("/history", (c) => {
-    const typeId = c.req.query("type") ?? project.listTypes()[0]?.id;
-    const enSlug = c.req.query("slug");
-    if (!typeId) return c.html(renderLayout("History", "<p>No content types.</p>"));
-
-    const db = openStore(config, "readonly");
-    let body = `<h1>History</h1><form><label>Type <select name="type">${project
-      .listTypes()
-      .map((t) => `<option value="${t.id}" ${t.id === typeId ? "selected" : ""}>${t.id}</option>`)
-      .join("")}</select></label> <label>EN slug <input name="slug" value="${enSlug ?? ""}" /></label> <button>View</button></form>`;
-
-    if (enSlug) {
-      const rows = listRevisions(db, typeId, enSlug)
-        .slice(0, 100)
-        .map(
-          (row) =>
-            `<tr><td>${row.created_at}</td><td>${row.revision_kind}</td><td>${row.locale ?? "en"}</td><td>${row.en_hash.slice(0, 8)}</td><td class="muted">${row.body_preview ?? ""}</td></tr>`,
-        )
-        .join("");
-      body += `<table><thead><tr><th>When</th><th>Kind</th><th>Locale</th><th>EN hash</th><th>Preview</th></tr></thead><tbody>${rows}</tbody></table>`;
-    } else {
-      const translations = listTranslationsForType(db, typeId).slice(0, 100);
-      body += `<ul>${translations
-        .map((row) => `<li><a href="/history?type=${typeId}&slug=${row.en_slug}">${row.en_slug}</a> (${row.locale})</li>`)
-        .join("")}</ul>`;
-    }
-    db.close();
-    return c.html(renderLayout("History", body));
+    const html = `<div class="toolbar">Staleness <span class="dim">· ${worklist.length} entries</span></div>
+      <table class="data">
+        <thead><tr><th>Type</th><th>Slug</th><th>Locale</th><th>Status</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="4" class="dim">All up to date</td></tr>`}</tbody>
+      </table>`;
+    return c.html(renderLayout("Staleness", html, project));
   });
 
   app.get("/api/staleness-matrix", (c) => {
+    const worklist = buildWorklist(config);
     const matrix: Record<string, Record<string, number>> = {};
     for (const type of project.listTypes()) {
       matrix[type.id] = {};
       for (const locale of config.locales) {
         if (locale === config.defaultLocale) continue;
-        const enSlugs = type.list().map((doc) => doc.slug);
-        let stale = 0;
-        for (const enSlug of enSlugs) {
-          const enDoc = readEnDocument(config, type.config, enSlug);
-          if (!enDoc) continue;
-          const payload = getTranslatablePayload(enDoc, type.config);
-          const hash = computePageEnHash(payload.frontmatter, payload.body);
-          const db = openStore(config, "readonly");
-          const row = db
-            .prepare(
-              `SELECT en_hash FROM translations WHERE content_type = ? AND en_slug = ? AND locale = ?`,
-            )
-            .get(type.id, enSlug, locale) as { en_hash: string } | undefined;
-          db.close();
-          if (!row || row.en_hash !== hash) stale++;
-        }
-        matrix[type.id]![locale] = stale;
+        matrix[type.id]![locale] = worklist.filter(
+          (item) => item.contentType === type.id && item.locale === locale,
+        ).length;
       }
     }
     return c.json(matrix);
