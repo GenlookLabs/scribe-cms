@@ -4,6 +4,7 @@ import { ProseBody } from "@/components/ProseBody";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { routing } from "@/i18n/routing";
 import { getOpenGraphLocale } from "@/lib/locale";
+import { buildLanguageAlternates } from "@/lib/metadata-alternates";
 import { getScribe } from "@/lib/scribe";
 
 type Props = {
@@ -23,10 +24,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     },
     alternates: {
       canonical: locale === routing.defaultLocale ? "/changelog" : `/${locale}/changelog`,
-      languages: {
-        en: "/changelog",
-        fr: "/fr/changelog",
-      },
+      languages: await buildLanguageAlternates("/changelog"),
     },
   };
 }

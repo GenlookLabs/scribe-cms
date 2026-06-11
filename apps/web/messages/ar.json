@@ -1,0 +1,23 @@
+{
+  "Site": {
+    "tagline": "نظام إدارة محتوى MDX مُنمَّط",
+    "home": "الرئيسية",
+    "examples": "أمثلة",
+    "changelog": "سجل التغييرات",
+    "gettingStarted": "البدء",
+    "install": "تثبيت",
+    "viewExamples": "عرض الأمثلة →",
+    "viewGettingStarted": "البدء →",
+    "viewDocs": "التوثيق →",
+    "github": "GitHub",
+    "examplesTitle": "أمثلة",
+    "examplesLead": "مقتطفات جاهزة للنسخ لسير عمل scribe-cms الشائعة.",
+    "changelogTitle": "سجل التغييرات",
+    "changelogLead": "ملاحظات إصدار scribe-cms — كل إصدار مستند محتوى يُعرض في هذه الصفحة.",
+    "languageLabel": "اللغة",
+    "footerNpm": "npm",
+    "footerGithub": "GitHub",
+    "madeBy": "من تطوير",
+    "genlookTagline": "تجربة افتراضية بالذكاء الاصطناعي للتجارة الإلكترونية"
+  }
+}

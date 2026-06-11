@@ -3,11 +3,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
-
-const localeNames: Record<string, string> = {
-  en: "English",
-  fr: "Français",
-};
+import { localeDisplayNames } from "@/lib/locale-display";
 
 export function LanguageSwitcher() {
   const t = useTranslations("Site");
@@ -25,7 +21,7 @@ export function LanguageSwitcher() {
       >
         {routing.locales.map((locale) => (
           <option key={locale} value={locale}>
-            {localeNames[locale] ?? locale}
+            {localeDisplayNames[locale] ?? locale}
           </option>
         ))}
       </select>

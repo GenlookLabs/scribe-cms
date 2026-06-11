@@ -1,0 +1,23 @@
+{
+  "Site": {
+    "tagline": "型付き MDX CMS",
+    "home": "ホーム",
+    "examples": "例",
+    "changelog": "変更履歴",
+    "gettingStarted": "はじめに",
+    "install": "インストール",
+    "viewExamples": "例を見る →",
+    "viewGettingStarted": "はじめに →",
+    "viewDocs": "ドキュメント →",
+    "github": "GitHub",
+    "examplesTitle": "例",
+    "examplesLead": "scribe-cms の一般的なワークフロー向けコピペ用スニペット。",
+    "changelogTitle": "変更履歴",
+    "changelogLead": "scribe-cms のリリースノート — 各バージョンはコンテンツドキュメントとしてこのページに表示されます。",
+    "languageLabel": "言語",
+    "footerNpm": "npm",
+    "footerGithub": "GitHub",
+    "madeBy": "制作",
+    "genlookTagline": "EC向け AI バーチャル試着"
+  }
+}

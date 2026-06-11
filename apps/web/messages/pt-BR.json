@@ -1,0 +1,23 @@
+{
+  "Site": {
+    "tagline": "CMS MDX tipado",
+    "home": "Início",
+    "examples": "Exemplos",
+    "changelog": "Changelog",
+    "gettingStarted": "Primeiros passos",
+    "install": "Instalar",
+    "viewExamples": "Ver exemplos →",
+    "viewGettingStarted": "Primeiros passos →",
+    "viewDocs": "Documentação →",
+    "github": "GitHub",
+    "examplesTitle": "Exemplos",
+    "examplesLead": "Trechos prontos para copiar dos fluxos comuns do scribe-cms.",
+    "changelogTitle": "Changelog",
+    "changelogLead": "Notas de versão do scribe-cms — cada versão é um documento de conteúdo, tudo nesta página.",
+    "languageLabel": "Idioma",
+    "footerNpm": "npm",
+    "footerGithub": "GitHub",
+    "madeBy": "Feito por",
+    "genlookTagline": "Provador virtual com IA para e-commerce"
+  }
+}

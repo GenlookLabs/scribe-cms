@@ -26,6 +26,16 @@ export default defineConfig({
   rootDir: ".",
   locales: [...locales],
   defaultLocale,
+  localePresets: {
+    all: ["fr", "pt-BR", "zh-CN", "es", "de", "ja", "ar", "it", "ru"],
+  },
+  translate: {
+    context: [
+      "Scribe (scribe-cms) is a typed, file-based CMS for multilingual MDX sites.",
+      "Never translate code identifiers, CLI commands, package names, or file paths.",
+      "Keep scribe-cms and Genlook brand names in English.",
+    ].join("\n"),
+  },
   types: [
     defineContentType({
       id: "page",

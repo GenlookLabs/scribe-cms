@@ -1,0 +1,23 @@
+{
+  "Site": {
+    "tagline": "Типизированная MDX CMS",
+    "home": "Главная",
+    "examples": "Примеры",
+    "changelog": "История изменений",
+    "gettingStarted": "Начало работы",
+    "install": "Установка",
+    "viewExamples": "Смотреть примеры →",
+    "viewGettingStarted": "Начало работы →",
+    "viewDocs": "Документация →",
+    "github": "GitHub",
+    "examplesTitle": "Примеры",
+    "examplesLead": "Готовые фрагменты для типичных сценариев scribe-cms.",
+    "changelogTitle": "История изменений",
+    "changelogLead": "Заметки о выпусках scribe-cms — каждая версия это документ контента на этой странице.",
+    "languageLabel": "Язык",
+    "footerNpm": "npm",
+    "footerGithub": "GitHub",
+    "madeBy": "Сделано",
+    "genlookTagline": "Виртуальная примерка с ИИ для e-commerce"
+  }
+}

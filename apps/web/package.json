@@ -6,6 +6,7 @@
     "predev": "node scripts/seed-translations.mjs",
     "dev": "next dev",
     "prebuild": "node scripts/seed-translations.mjs",
+    "translate": "scribe translate --type page --preset all --strategy missing-only --no-progress --concurrency 3 && scribe translate --type example --preset all --strategy missing-only --no-progress --concurrency 3 && scribe translate --type changelog --preset all --strategy missing-only --no-progress --concurrency 3",
     "build": "scribe validate && next build",
     "start": "next start",
     "scribe": "scribe"
