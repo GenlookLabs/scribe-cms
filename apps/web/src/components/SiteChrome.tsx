@@ -8,6 +8,7 @@ const links = [
   { href: "/", key: "home" as const },
   { href: "/examples", key: "examples" as const },
   { href: "/getting-started", key: "gettingStarted" as const },
+  { href: "/changelog", key: "changelog" as const },
 ] as const;
 
 export function SiteHeader({ active }: { active?: (typeof links)[number]["href"] }) {

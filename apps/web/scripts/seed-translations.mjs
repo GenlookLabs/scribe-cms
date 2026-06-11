@@ -52,6 +52,18 @@ Consultez la page [Exemples](/examples) pour des extraits à copier-coller.`,
   },
 };
 
+const frenchChangelog = {
+  "0-0-6": `## Modifié
+
+- Remplacement de la table \`revisions\` par locale par des \`en_snapshots\` dédupliqués liés via \`translations.snapshot_id\`
+- Les snapshots stockent la source EN au moment de la traduction ; plusieurs locales partagent un snapshot par \`en_hash\`
+- \`scribe history\` et Studio affichent les métadonnées du snapshot EN au lieu de la timeline de révisions
+
+## Supprimé
+
+- Table \`revisions\` (supprimée automatiquement lors de la migration vers le schéma v4)`,
+};
+
 const frenchExamples = {
   install: {
     title: "Installation",
@@ -100,6 +112,10 @@ function translatableExampleFrontmatter(frontmatter) {
     title: frontmatter.title,
     caption: frontmatter.caption,
   };
+}
+
+function translatableChangelogFrontmatter() {
+  return {};
 }
 
 fs.mkdirSync(path.dirname(config.storePath), { recursive: true });
@@ -164,6 +180,34 @@ for (const [slug, french] of Object.entries(frenchPages)) {
       installCommand: frontmatter.installCommand,
     }),
     french.body,
+    enHash,
+    new Date().toISOString(),
+    "seed",
+  );
+  updated++;
+}
+
+for (const [slug, frenchBody] of Object.entries(frenchChangelog)) {
+  const { frontmatter, body } = readMdx(path.join("changelog", `${slug}.mdx`));
+  const enHash = hashTranslation(translatableChangelogFrontmatter(), body);
+  const localeFrontmatter = JSON.stringify({ version: frontmatter.version });
+  const existing = db
+    .prepare(
+      "SELECT en_hash, frontmatter_json FROM translations WHERE content_type = ? AND en_slug = ? AND locale = ?",
+    )
+    .get("changelog", slug, "fr");
+
+  if (existing?.en_hash === enHash && existing.frontmatter_json === localeFrontmatter) {
+    continue;
+  }
+
+  upsert.run(
+    "changelog",
+    slug,
+    "fr",
+    slug,
+    localeFrontmatter,
+    frenchBody,
     enHash,
     new Date().toISOString(),
     "seed",

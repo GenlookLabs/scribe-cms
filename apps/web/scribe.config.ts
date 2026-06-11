@@ -15,6 +15,10 @@ const exampleSchema = z.object({
   order: field.structural(z.number().default(0)),
 });
 
+const changelogSchema = z.object({
+  version: field.structural(z.string().regex(/^\d+\.\d+\.\d+$/)),
+});
+
 export default defineConfig({
   // Relative: the CLI resolves it against this file's directory, the runtime
   // against process.cwd(). Never derive it from import.meta.url — bundlers
@@ -33,6 +37,12 @@ export default defineConfig({
       contentDir: "examples",
       schema: exampleSchema,
       orderBy: "slug",
+    }),
+    defineContentType({
+      id: "changelog",
+      contentDir: "changelog",
+      schema: changelogSchema,
+      orderBy: "-publishedAt",
     }),
   ],
 });

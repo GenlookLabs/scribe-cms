@@ -218,6 +218,41 @@ h1 {
   font-size: 0.9375rem;
 }
 
+.changelog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.changelog-entry {
+  scroll-margin-top: 1rem;
+  padding-bottom: 2.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.changelog-entry:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.changelog-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.changelog-version {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.changelog-date {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
 .code-block {
   margin: 0;
   padding: 1rem 1.25rem;
