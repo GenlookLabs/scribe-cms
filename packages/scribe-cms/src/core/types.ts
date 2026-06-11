@@ -119,6 +119,8 @@ export interface ScribeConfigInput<
   contentDir?: string;
   /** Path to the SQLite translation store. Default: `".scribe/store.sqlite"`. Commit this file; do not gitignore `.scribe/`. */
   store?: string;
+  /** Path to the static assets folder (e.g. Next.js `public`). Relative to project `rootDir`. When set, `scribe validate` warns on missing image files. */
+  assetsDir?: string;
   /** All locales, including the default one. */
   locales: string[];
   /** Canonical source locale. Must be in `locales`. Default: `"en"`. */
@@ -137,6 +139,8 @@ export interface ScribeConfig {
   rootDir: string;
   /** Absolute path to the SQLite translation store. */
   storePath: string;
+  /** Absolute path to the static assets folder, when `assetsDir` is configured. */
+  assetsPath?: string;
   locales: string[];
   defaultLocale: string;
   localePresets?: LocalePresets;

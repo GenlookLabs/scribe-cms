@@ -12,6 +12,7 @@ import { buildWorklist, resolveLocalesFromPreset, type TranslationWorklistStrate
 import { startStudio } from "../studio/server.js";
 import { promptTranslateSelection } from "./prompt-translate.js";
 import { createTranslateProgressReporter } from "./translate-progress.js";
+import { SCRIBE_VERSION } from "../src/version.js";
 
 interface CliOptions {
   config?: string;
@@ -134,7 +135,14 @@ function loadProject(options: CliOptions) {
 }
 
 async function main(): Promise<void> {
-  const { command, options, rest } = parseArgs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  const first = argv[0];
+  if (first === "--version" || first === "-V" || first === "version") {
+    console.log(SCRIBE_VERSION);
+    return;
+  }
+
+  const { command, options, rest } = parseArgs(argv);
   loadEnvFromCwd(options.cwd);
 
   if (command === "help" || command === "--help") {
@@ -147,6 +155,7 @@ Commands:
   translate              Translate stale/missing locale pages
   history <type> <slug>  Show revision timeline
   studio                 Start read-only local studio
+  version                Print scribe-cms version
 
 Export-static flags:
   --out <dir>            Output directory (default: public)
@@ -166,6 +175,11 @@ Translate flags:
   --strategy <mode>      all (default) or missing-only
   --no-progress          Plain line logging instead of live progress
 `);
+    return;
+  }
+
+  if (command === "version") {
+    console.log(SCRIBE_VERSION);
     return;
   }
 

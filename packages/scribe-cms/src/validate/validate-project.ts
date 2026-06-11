@@ -8,14 +8,13 @@ import {
   validateAliasRedirectChains,
 } from "../core/slug-aliases.js";
 import { validateLocaleBuiltinFields } from "../core/builtin-fields.js";
-import { computePageEnHash } from "../hash/page-hash.js";
-import { getTranslatablePayload, readEnDocument } from "../loader/create-loader.js";
+import { readEnDocument } from "../loader/create-loader.js";
 import { isPublishableContentFile } from "../loader/normalize-en.js";
-import { recordRevision } from "../history/record-revision.js";
 import { openStore } from "../storage/sqlite.js";
 import { isRoutableType } from "../i18n/build-url.js";
 import { getTranslation } from "../storage/translations.js";
 import { validateRelations } from "./validate-relations.js";
+import { validateDocumentAssets } from "./validate-assets.js";
 import { validateTranslationSlugSuffixes } from "./validate-slug-suffix.js";
 
 export interface ValidateIssue {
@@ -41,7 +40,7 @@ function listEnSlugs(rootDir: string, contentDir: string): string[] {
     .map((f) => f.replace(/\.(md|mdx)$/, ""));
 }
 
-/** Validate EN files, SQLite consistency, relations, aliases, and slug rules. */
+/** Validate EN files, SQLite consistency, relations, aliases, slug rules, and assets. */
 export function validateProject(config: ScribeConfig): ValidateResult {
   const issues: ValidateIssue[] = [];
   const project = createProject(config);
@@ -81,8 +80,6 @@ export function validateProject(config: ScribeConfig): ValidateResult {
         continue;
       }
 
-      const payload = getTranslatablePayload(enDoc, type);
-      const currentEnHash = computePageEnHash(payload.frontmatter, payload.body);
       const crossIssues =
         type.crossValidate?.(enDoc.frontmatter as never, {
           locale: config.defaultLocale,
@@ -102,29 +99,19 @@ export function validateProject(config: ScribeConfig): ValidateResult {
         });
       }
 
+      for (const issue of validateDocumentAssets(config, {
+        contentType: type.id,
+        enSlug,
+        frontmatter: enDoc.frontmatter,
+        body: enDoc.content,
+      })) {
+        issues.push(issue);
+      }
+
       for (const locale of config.locales) {
         if (locale === config.defaultLocale) continue;
         const row = getTranslation(db, type.id, enSlug, locale);
         if (!row) continue;
-        if (row.en_hash !== currentEnHash) {
-          issues.push({
-            level: "warning",
-            contentType: type.id,
-            enSlug,
-            locale,
-            field: "en_hash",
-            message: "Translation is stale (en_hash mismatch)",
-          });
-          recordRevision(config, {
-            contentType: type.id,
-            enSlug,
-            locale,
-            revisionKind: "en_edit_detected",
-            enHash: currentEnHash,
-            body: row.body,
-            frontmatter: JSON.parse(row.frontmatter_json) as Record<string, unknown>,
-          });
-        }
 
         const localeFm = JSON.parse(row.frontmatter_json) as Record<string, unknown>;
         for (const issue of validateLocaleBuiltinFields(localeFm)) {
@@ -136,6 +123,16 @@ export function validateProject(config: ScribeConfig): ValidateResult {
             field: issue.field,
             message: issue.message,
           });
+        }
+
+        for (const issue of validateDocumentAssets(config, {
+          contentType: type.id,
+          enSlug,
+          locale,
+          frontmatter: localeFm,
+          body: row.body,
+        })) {
+          issues.push(issue);
         }
       }
     }

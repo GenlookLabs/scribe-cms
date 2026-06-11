@@ -112,7 +112,8 @@ scribe translate --preset ultraLight
 | Command                                    | Description                                                                     |
 | ------------------------------------------ | ------------------------------------------------------------------------------- |
 | `scribe status`                            | English doc counts + per-locale translation counts.                             |
-| `scribe validate`                          | Schemas, relations, aliases, slugs, store consistency. Non-zero exit on errors. |
+| `scribe version`                           | Print installed scribe-cms version.                                           |
+| `scribe validate`                          | Schemas, relations, aliases, slugs, assets. Non-zero exit on errors. |
 | `scribe translate [flags]`                 | Translate missing/stale pages. Flags above.                                     |
 | `scribe history <type> <en-slug> [locale]` | Revision timeline.                                                              |
 | `scribe studio [--port 3600]`              | Local read-only admin UI.                                                       |

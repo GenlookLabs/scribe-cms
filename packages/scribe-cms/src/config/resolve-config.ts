@@ -48,6 +48,7 @@ export function resolveConfig(
   const projectRoot = path.resolve(baseDir ?? process.cwd(), raw.rootDir);
   const contentRoot = path.resolve(projectRoot, raw.contentDir ?? "content");
   const storePath = path.resolve(projectRoot, raw.store ?? ".scribe/store.sqlite");
+  const assetsPath = raw.assetsDir ? path.resolve(projectRoot, raw.assetsDir) : undefined;
 
   const seenIds = new Set<string>();
   const types: ContentTypeConfig[] = raw.types.map((type) => {
@@ -70,6 +71,7 @@ export function resolveConfig(
   const config: ScribeConfig = {
     rootDir: contentRoot,
     storePath,
+    assetsPath,
     locales: [...raw.locales],
     defaultLocale,
     localePresets: raw.localePresets,

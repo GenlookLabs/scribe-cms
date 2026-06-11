@@ -98,7 +98,6 @@ scribe validate
 Checks, per English file: schema parse, built-in field shapes, your
 `crossValidate` hook, relation integrity (dangling required relation = error,
 dangling optional relation = warning), alias collisions and redirect chains,
-localized-slug suffix rules, and store consistency (stale translations are
-reported as warnings).
+localized-slug suffix rules, and missing image assets when `assetsDir` is set.
 
 Exit code is non-zero when any error is found — run it before your build.
