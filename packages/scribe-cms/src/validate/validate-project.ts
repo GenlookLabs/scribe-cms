@@ -195,7 +195,7 @@ export function validateProject(config: ScribeConfig): ValidateResult {
   try {
     for (const issue of validateTranslationSlugSuffixes(config, dbForSuffix)) {
       issues.push({
-        level: "error",
+        level: "warning",
         contentType: issue.contentTypeId,
         enSlug: issue.enSlug,
         locale: issue.locale,

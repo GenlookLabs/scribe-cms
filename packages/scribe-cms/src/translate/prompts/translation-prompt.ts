@@ -48,6 +48,11 @@ export function buildPageTranslationPrompt(input: {
     ...(input.contextLabel ? [`Document: ${input.contextLabel}`, ""] : []),
     "## Rules",
     ...input.resolved.rules.map((rule) => `- ${rule}`),
+    ...(input.slugStrategy === "localized"
+      ? [
+          `- The slug MUST be written in ${localeName}, derived from the ${localeName} title and its meaning — never the English slug. Transliterate non-Latin ${localeName} into ASCII Latin.`,
+        ]
+      : []),
     "",
     "## Output format",
     "Return ONLY valid JSON with keys:",

@@ -1,3 +1,4 @@
+import { stripLocaleSuffixFromSlug } from "../core/localized-slug.js";
 import type { ScribeConfig, ScribeDocument } from "../core/types.js";
 import { computePageEnHash } from "../hash/page-hash.js";
 import { getTranslatablePayload, readEnDocument } from "../loader/create-loader.js";
@@ -29,6 +30,7 @@ export interface TranslatePageResult {
   estimatedCostUsd?: number;
   durationMs?: number;
   error?: string;
+  slugAdjusted?: { from: string; to: string; matchedCode: string };
 }
 
 export interface TranslateWorklistTotals {
@@ -175,10 +177,14 @@ export async function translatePage(
       model,
       responseSchema: responseSchema ?? undefined,
     });
-    const slug =
+    const rawSlug =
       type.slugStrategy === "localized"
         ? (result.parsed.slug ?? existing?.slug ?? item.enSlug)
         : item.enSlug;
+    const localeCodes = config.locales.filter((l) => l !== config.defaultLocale);
+    const { slug, stripped, matchedCode } = stripLocaleSuffixFromSlug(rawSlug, localeCodes);
+    const slugAdjusted =
+      stripped && matchedCode ? { from: rawSlug, to: slug, matchedCode } : undefined;
 
     const validated = validateTranslatedFrontmatter(enDoc, result.parsed.frontmatter, type.schema);
     if (!validated.ok) {
@@ -224,6 +230,7 @@ export async function translatePage(
       usage: result.usage,
       estimatedCostUsd,
       durationMs: Date.now() - startedAt,
+      slugAdjusted,
     };
   } catch (error) {
     return {

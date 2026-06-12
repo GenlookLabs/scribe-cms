@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { findLocaleSuffixInSlug } from "../core/localized-slug.js";
 import type { ScribeConfig } from "../core/types.js";
 import { bulkLoadTranslations } from "../storage/translations.js";
 
@@ -21,17 +22,15 @@ export function validateTranslationSlugSuffixes(
   for (const row of bulkLoadTranslations(db)) {
     if (row.locale === config.defaultLocale) continue;
 
-    for (const code of localeCodes) {
-      if (row.slug.endsWith(`-${code}`)) {
-        issues.push({
-          contentTypeId: row.content_type,
-          enSlug: row.en_slug,
-          locale: row.locale,
-          slug: row.slug,
-          message: `Translation slug "${row.slug}" ends with locale code "-${code}"`,
-        });
-        break;
-      }
+    const matchedCode = findLocaleSuffixInSlug(row.slug, localeCodes);
+    if (matchedCode) {
+      issues.push({
+        contentTypeId: row.content_type,
+        enSlug: row.en_slug,
+        locale: row.locale,
+        slug: row.slug,
+        message: `Translation slug "${row.slug}" ends with locale code "-${matchedCode}"`,
+      });
     }
   }
 

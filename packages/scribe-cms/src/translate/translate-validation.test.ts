@@ -159,4 +159,29 @@ describe("buildPageTranslationPrompt", () => {
     assert.doesNotMatch(prompt, /title: free/);
     assert.doesNotMatch(prompt, /description:/);
   });
+
+  it("adds a locale-specific slug rule for the localized strategy", () => {
+    const prompt = buildPageTranslationPrompt({
+      resolved: { model: "gemini-3.1-pro", rules: [], context: undefined, promptOverride: undefined },
+      targetLocale: "ru",
+      contextLabel: "Some post",
+      translatableFrontmatter: { title: "Some post" },
+      enBody: "",
+      slugStrategy: "localized",
+    });
+    assert.match(prompt, /slug MUST be written in Russian/);
+    assert.match(prompt, /never the English slug/);
+  });
+
+  it("omits the slug rule for the fixed strategy", () => {
+    const prompt = buildPageTranslationPrompt({
+      resolved: { model: "gemini-3.1-pro", rules: [], context: undefined, promptOverride: undefined },
+      targetLocale: "ru",
+      contextLabel: "Some post",
+      translatableFrontmatter: { title: "Some post" },
+      enBody: "",
+      slugStrategy: "fixed",
+    });
+    assert.doesNotMatch(prompt, /slug MUST be written in/);
+  });
 });

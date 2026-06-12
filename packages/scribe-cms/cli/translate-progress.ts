@@ -32,8 +32,18 @@ function statusForResult(result: TranslatePageResult, dryRun: boolean): string {
   return green("translated");
 }
 
+function slugAdjustedMessage(result: TranslatePageResult): string | undefined {
+  if (!result.slugAdjusted) return undefined;
+  const { from, to, matchedCode } = result.slugAdjusted;
+  return yellow(
+    `slug adjusted: "${from}" → "${to}" (stripped -${matchedCode})`,
+  );
+}
+
 function detailForResult(result: TranslatePageResult): string {
   const parts: string[] = [];
+  const slugMsg = slugAdjustedMessage(result);
+  if (slugMsg) parts.push(slugMsg);
   if (result.durationMs !== undefined) parts.push(`${(result.durationMs / 1000).toFixed(1)}s`);
   if (result.usage) {
     parts.push(`${formatTokenCount(result.usage.inputTokens)} in`);
@@ -79,6 +89,10 @@ export function createTranslateProgressReporter(options: {
           const status = statusForResult(event.result, dryRun);
           const detail = detailForResult(event.result);
           console.log(`${label}: ${status}${detail ? ` (${detail.replace(/\x1b\[[0-9;]*m/g, "")})` : ""}`);
+          const slugMsg = slugAdjustedMessage(event.result);
+          if (slugMsg) {
+            console.log(`[warning] ${labelForResult(event.result)} ${slugMsg.replace(/\x1b\[[0-9;]*m/g, "")}`);
+          }
           if (event.result.failed && event.result.error) {
             console.error(event.result.error);
           }
@@ -193,6 +207,14 @@ export function createTranslateProgressReporter(options: {
           renderedLines = 0;
           for (const result of event.results.filter((entry) => entry.failed)) {
             process.stdout.write("\x1b[2K" + red(`${labelForResult(result)}: ${result.error ?? "failed"}`) + "\n");
+          }
+          for (const result of event.results.filter((entry) => entry.slugAdjusted)) {
+            const slugMsg = slugAdjustedMessage(result);
+            if (slugMsg) {
+              process.stdout.write(
+                "\x1b[2K" + yellow(`[warning] ${labelForResult(result)} ${slugMsg.replace(/\x1b\[[0-9;]*m/g, "")}`) + "\n",
+              );
+            }
           }
           break;
       }

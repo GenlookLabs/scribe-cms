@@ -1,0 +1,17 @@
+---
+version: "0.0.7"
+publishedAt: "2026-06-12"
+---
+
+## Fixed
+
+- Localized slugs that accidentally ended with a locale code (e.g. `-fr`, `-he`, `-ar`) are now stripped automatically during `scribe translate`, so URLs stay clean
+- `scribe validate` no longer fails the build when an existing translation slug ends with a locale code — it now reports a warning instead of an error
+
+## Improved
+
+- Localized slugs are now genuinely translated into the target language instead of staying in English: the translator is told the target language by name and to base the slug on the translated title, transliterating non-Latin scripts into Latin
+
+## Added
+
+- Translator prompt now instructs the model not to append locale codes to slugs, since locale routing is handled by the URL prefix
