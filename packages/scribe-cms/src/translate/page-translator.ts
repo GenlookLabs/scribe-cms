@@ -11,6 +11,7 @@ import { normalizeGeminiDisplayName } from "./gemini-models.js";
 import { buildPageTranslationPrompt } from "./prompts/translation-prompt.js";
 import { buildGeminiResponseSchema } from "./response-schema.js";
 import { resolveTranslateConfig } from "./resolve-translate-config.js";
+import { sanitizeMdxJsxAttributeQuotes } from "./sanitize-mdx-jsx.js";
 import { validateTranslatedFrontmatter } from "./validate-translation.js";
 import type { TranslationWorkItem } from "./worklist.js";
 
@@ -31,6 +32,7 @@ export interface TranslatePageResult {
   durationMs?: number;
   error?: string;
   slugAdjusted?: { from: string; to: string; matchedCode: string };
+  mdxAdjusted?: boolean;
 }
 
 export interface TranslateWorklistTotals {
@@ -191,6 +193,10 @@ export async function translatePage(
       throw new Error(`Translation validation failed: ${validated.error}`);
     }
 
+    const { body: translatedBody, adjusted: mdxAdjusted } = sanitizeMdxJsxAttributeQuotes(
+      result.parsed.body,
+    );
+
     const writeDb = openStore(config, "readwrite");
     const snapshotId = recordEnSnapshot(
       config,
@@ -209,7 +215,7 @@ export async function translatePage(
       locale: item.locale,
       slug,
       frontmatter: validated.frontmatter,
-      body: result.parsed.body,
+      body: translatedBody,
       enHash: currentEnHash,
       translatedAt: new Date().toISOString(),
       model: result.model,
@@ -231,6 +237,7 @@ export async function translatePage(
       estimatedCostUsd,
       durationMs: Date.now() - startedAt,
       slugAdjusted,
+      mdxAdjusted: mdxAdjusted || undefined,
     };
   } catch (error) {
     return {
