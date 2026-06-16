@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.8 — 2026-06-16
+
+### Added
+
+- `listRoutableTypes()` on `createScribe()` and `ScribeProject` — returns content types with a `path` template (public URLs, hreflang, sitemap)
+- `isRoutableType` exported from `scribe-cms` and `scribe-cms/runtime` for apps and build scripts
+
 ## 0.0.7 — 2026-06-12
 
 ### Fixed

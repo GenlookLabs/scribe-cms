@@ -1,6 +1,6 @@
 {
   "name": "scribe-cms",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Typed, file-based CMS for multilingual MDX sites",
   "homepage": "https://scribe.genlook.app",
   "repository": {
