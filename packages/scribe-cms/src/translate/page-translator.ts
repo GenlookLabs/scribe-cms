@@ -11,7 +11,7 @@ import { normalizeGeminiDisplayName } from "./gemini-models.js";
 import { buildPageTranslationPrompt } from "./prompts/translation-prompt.js";
 import { buildGeminiResponseSchema } from "./response-schema.js";
 import { resolveTranslateConfig } from "./resolve-translate-config.js";
-import { sanitizeMdxJsxAttributeQuotes } from "./sanitize-mdx-jsx.js";
+import { assertValidTranslatedMdxBody } from "./validate-mdx-body.js";
 import { validateTranslatedFrontmatter } from "./validate-translation.js";
 import type { TranslationWorkItem } from "./worklist.js";
 
@@ -193,7 +193,7 @@ export async function translatePage(
       throw new Error(`Translation validation failed: ${validated.error}`);
     }
 
-    const { body: translatedBody, adjusted: mdxAdjusted } = sanitizeMdxJsxAttributeQuotes(
+    const { body: translatedBody, adjusted: mdxAdjusted } = assertValidTranslatedMdxBody(
       result.parsed.body,
     );
 

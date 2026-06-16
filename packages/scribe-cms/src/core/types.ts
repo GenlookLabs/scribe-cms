@@ -69,8 +69,6 @@ export interface ScribeTranslateDefaults {
   prompt?: string;
   context?: string;
   rules?: string[];
-  /** Lowercase terms preserved verbatim in localized slugs */
-  slugPreserveTerms?: string[];
 }
 
 /**

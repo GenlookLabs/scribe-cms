@@ -12,6 +12,7 @@ import { getTranslation } from "../storage/translations.js";
 import { validateRelations } from "./validate-relations.js";
 import { validateDocumentAssets } from "./validate-assets.js";
 import { validateTranslationSlugSuffixes } from "./validate-slug-suffix.js";
+import { prepareTranslatedMdxBody, validateMdxBody } from "../translate/validate-mdx-body.js";
 
 export interface ValidateIssue {
   level: "error" | "warning" | "info";
@@ -121,14 +122,27 @@ export function validateProject(config: ScribeConfig): ValidateResult {
           });
         }
 
+        const preparedBody = prepareTranslatedMdxBody(row.body).body;
         for (const issue of validateDocumentAssets(config, {
           contentType: type.id,
           enSlug,
           locale,
           frontmatter: localeFm,
-          body: row.body,
+          body: preparedBody,
         })) {
           issues.push(issue);
+        }
+
+        const mdxValidation = validateMdxBody(preparedBody);
+        if (!mdxValidation.ok) {
+          issues.push({
+            level: "error",
+            contentType: type.id,
+            enSlug,
+            locale,
+            field: "body",
+            message: `Invalid MDX: ${mdxValidation.error}`,
+          });
         }
       }
     }

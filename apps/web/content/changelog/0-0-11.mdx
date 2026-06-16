@@ -1,0 +1,17 @@
+---
+version: "0.0.11"
+publishedAt: "2026-06-16"
+---
+
+## Added
+
+- MDX validation at translation time and in `scribe validate` — catches bodies that would fail Next.js prerender
+
+## Changed
+
+- Built-in rules: do not translate brand names unless locally known; MDX bodies must use real line breaks
+- Legacy translations with literal `\n` escapes are normalized on read
+
+## Removed
+
+- `slugPreserveTerms` — steer brand handling via `translate.context` / `translate.rules` instead

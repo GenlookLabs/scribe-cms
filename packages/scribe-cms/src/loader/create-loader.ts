@@ -17,6 +17,7 @@ import type {
 } from "../core/types.js";
 import { openStore, resolveStorePath } from "../storage/sqlite.js";
 import { listTranslationsForType } from "../storage/translations.js";
+import { prepareTranslatedMdxBody } from "../translate/validate-mdx-body.js";
 import { isPublishableContentFile, normalizeEnFrontmatter } from "./normalize-en.js";
 
 function isPostFile(name: string): boolean {
@@ -152,7 +153,7 @@ function buildDocumentFromTranslation(
     noindex: seo.noindex,
     canonicalPathOverride: seo.canonicalPathOverride,
     frontmatter,
-    content: row.body,
+    content: prepareTranslatedMdxBody(row.body).body,
   };
 }
 

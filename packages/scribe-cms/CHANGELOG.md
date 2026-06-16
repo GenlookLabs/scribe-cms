@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.0.11 — 2026-06-16
+
+### Added
+
+- MDX compile validation at translation time — invalid translated bodies are rejected before upsert
+- `scribe validate` checks stored translation bodies for MDX parse errors (after normalizing common Gemini escape-sequence mistakes)
+
+### Changed
+
+- Built-in translation rules: brand names should not be translated unless they have a well-known local name in the target market; MDX bodies must use real line breaks, not JSON `\\n` escapes
+- Translated bodies are normalized on read when legacy rows contain literal `\\n` escape sequences
+
+### Removed
+
+- `slugPreserveTerms` project config option — use `translate.context` / `translate.rules` for brand guidance instead
+
 ## 0.0.10 — 2026-06-16
 
 ### Fixed

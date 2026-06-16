@@ -54,7 +54,6 @@ export default defineConfig({
   translate: {
     context: "MyBrand is a B2B SaaS. Never translate the brand name MyBrand.",
     rules: ["Keep numbers and statistics accurate."],
-    slugPreserveTerms: ["mybrand"], // kept verbatim in localized slugs
   },
   types: [
     defineContentType({
@@ -77,7 +76,8 @@ export default defineConfig({
 | `rules`                  | project + type  | Extra rules appended to the defaults.                                                                            |
 | `prompt`                 | project or type | Replace the default system prompt entirely.                                                                      |
 | `defaultModel` / `model` | project / type  | Gemini model id. Default: `gemini-2.5-pro` (also overridable via the `PROSE_GEMINI_MODEL` env var or `--model`). |
-| `slugPreserveTerms`      | project         | Lowercase terms kept verbatim in localized slugs.                                                                |
+
+Built-in rules (always applied) include: do not translate brand names unless they have a well-known local name in the target market, return MDX bodies with real line breaks (not `\\n` escapes), and fix JSX attribute quoting when values contain `"`.
 
 ## Reviewing translations
 
