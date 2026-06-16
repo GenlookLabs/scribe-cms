@@ -78,7 +78,7 @@ export function validateTypeRedirects(project: ScribeProject): ValidateIssue[] {
 
     for (const entry of loaded.entries) {
       for (const from of entry.fromSlugs) {
-        if (from === entry.toSlug) {
+        if (entry.kind === "same-type" && from === entry.toSlug) {
           issues.push({
             level: "error",
             contentType: type.id,
@@ -179,16 +179,24 @@ export function validateTypeRedirects(project: ScribeProject): ValidateIssue[] {
 
       for (const from of entry.fromSlugs) {
         if (globalFrom.get(from)?.typeId !== file.contentTypeId) continue;
-        const chainTarget = globalFrom.get(entry.toSlug);
-        if (chainTarget) {
-          issues.push({
-            level: "error",
-            contentType: file.contentTypeId,
-            enSlug: from,
-            field: TYPE_REDIRECTS_FILENAME,
-            message: `Redirect chain detected: "${from}" → "${entry.toSlug}" → existing redirect source`,
-          });
-        }
+
+        const targetAsSource = globalFrom.get(entry.toSlug!);
+        if (!targetAsSource) continue;
+
+        const sameSlugCrossType =
+          entry.kind === "cross-type" &&
+          entry.fromSlugs.includes(entry.toSlug!) &&
+          targetAsSource.typeId === file.contentTypeId;
+
+        if (sameSlugCrossType) continue;
+
+        issues.push({
+          level: "error",
+          contentType: file.contentTypeId,
+          enSlug: from,
+          field: TYPE_REDIRECTS_FILENAME,
+          message: `Redirect chain detected: "${from}" → "${entry.toSlug}" → existing redirect source`,
+        });
       }
     }
   }
