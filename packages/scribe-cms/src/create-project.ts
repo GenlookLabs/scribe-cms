@@ -11,7 +11,7 @@ import type {
 import { listRelationFields, type SchemaFieldMeta } from "./core/introspect-schema.js";
 import { createContentLoader } from "./loader/create-loader.js";
 import { resolveLocalizedDocument } from "./i18n/resolve-document.js";
-import { isRoutableType, resolvePath } from "./i18n/build-url.js";
+import { createUrlBuilder, isRoutableType } from "./i18n/build-url.js";
 
 function comparatorFor(orderBy: OrderBy): (a: ScribeDocument, b: ScribeDocument) => number {
   if (typeof orderBy === "function") return orderBy;
@@ -50,6 +50,8 @@ function buildRuntime(
     return type.path;
   }
 
+  const urlBuilder = createUrlBuilder(config);
+
   const runtime: ContentTypeRuntime = {
     id: type.id,
     config: type,
@@ -68,15 +70,21 @@ function buildRuntime(
     },
 
     resolve(slug: string, locale: string) {
-      const result = resolveLocalizedDocument(slug, locale, config.defaultLocale, load(), type);
+      const result = resolveLocalizedDocument(
+        slug,
+        locale,
+        config.defaultLocale,
+        load(),
+        type,
+        config.localeRouting,
+      );
       if (result.document && type.path) {
         return {
           ...result,
-          canonicalPath: resolvePath(
+          canonicalPath: urlBuilder.resolvePath(
             type.path,
             result.document.slug,
             result.actualLocale,
-            config.defaultLocale,
           ),
         };
       }
@@ -105,10 +113,9 @@ function buildRuntime(
     alternates(doc: ScribeDocument) {
       const pathTemplate = assertRoutable("alternates");
       const out: Record<string, string> = {
-        [config.defaultLocale]: resolvePath(
+        [config.defaultLocale]: urlBuilder.resolvePath(
           pathTemplate,
           doc.enSlug,
-          config.defaultLocale,
           config.defaultLocale,
         ),
       };
@@ -117,7 +124,7 @@ function buildRuntime(
         if (locale === config.defaultLocale) continue;
         const translated = all.get(locale)?.byEnSlug.get(doc.enSlug);
         if (translated) {
-          out[locale] = resolvePath(pathTemplate, translated.slug, locale, config.defaultLocale);
+          out[locale] = urlBuilder.resolvePath(pathTemplate, translated.slug, locale);
         }
       }
       return out;
@@ -134,7 +141,7 @@ function buildRuntime(
 
     url(slug: string, locale: string) {
       const pathTemplate = assertRoutable("url");
-      return resolvePath(pathTemplate, slug, locale, config.defaultLocale);
+      return urlBuilder.resolvePath(pathTemplate, slug, locale);
     },
 
     related(doc: ScribeDocument, fieldName: string, locale?: string) {

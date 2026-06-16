@@ -12,7 +12,6 @@ function shouldIncludeEnDoc(
   contentTypeId: string,
   excludeNoindex: boolean,
 ): boolean {
-  if (enDoc.redirectTo) return false;
   if (redirectSources.aliasSlugs.has(enSlug)) return false;
   const outbound = redirectSources.outboundByType.get(contentTypeId);
   if (outbound?.has(enSlug)) return false;

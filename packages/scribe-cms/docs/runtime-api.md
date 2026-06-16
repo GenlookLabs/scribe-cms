@@ -29,8 +29,6 @@ Documents have this shape — `frontmatter` is typed from your Zod schema:
   publishedAt?: string;
   updatedAt?: string;
   noindex: boolean;
-  aliases: string[];   // EN docs only
-  redirectTo?: string;
 }
 ```
 
@@ -63,14 +61,16 @@ const r = scribe.blog.resolve(slug, locale);
 // {
 //   document: BlogDoc | null,
 //   actualLocale: string,        // "en" when EN fallback kicked in
-//   shouldRedirectTo?: string,   // 301 target (alias / wrong-locale slug / redirect_to)
+//   shouldRedirectTo?: string,   // 301 target (wrong-locale slug correction)
 //   canonicalPath?: string,      // locale-aware pathname for the document
 // }
 ```
 
-Handles, in order: direct hit → alias redirect → wrong-locale slug redirect →
-English fallback (when `indexFallback: "en"`). A typical page handler
-(Next.js shown; map to your framework's redirect/404 primitives):
+Handles, in order: direct hit → wrong-locale slug redirect → English fallback
+(when `indexFallback: "en"`). Slug migrations and retired documents are handled
+by `_redirects.json` rules in your proxy/static redirect map, not by
+`resolve()`. A typical page handler (Next.js shown; map to your framework's
+redirect/404 primitives):
 
 ```ts
 const resolved = scribe.blog.resolve(slug, locale);
@@ -170,8 +170,7 @@ Returns plain JSON entries (`url`, `lastModified`, `changeFrequency`,
 `priority`, hreflang `alternates.languages` including `x-default`) — the
 shape matches Next.js `MetadataRoute.Sitemap`, and serializes directly into
 sitemap XML for any other stack. One entry per English document across all
-routable types; skips `noindex`, aliases, and retired (`redirect_to`)
-documents.
+routable types; skips `noindex` and redirect source slugs from `_redirects.json`.
 
 Options: `baseUrl` (required), `contentTypes`, `typeDefaults`, `resolveUrl`,
 `resolvePathname`, `excludeNoindex` (default true), `includeXDefault`
@@ -179,16 +178,23 @@ Options: `baseUrl` (required), `contentTypes`, `typeDefaults`, `resolveUrl`,
 
 ## Redirects
 
-For statically-exported redirect rules (aliases, `redirect_to`, cross-locale
+For statically-exported redirect rules (`_redirects.json`, cross-locale
 slugs), use the build-script entry:
 
 ```ts
 // scripts/generate-redirects.ts — run before the app build
-import { buildAllContentRedirects, createProject, loadConfigSync } from "scribe-cms";
+import {
+  buildAllContentRedirects,
+  createProject,
+  createUrlBuilder,
+  loadConfigSync,
+} from "scribe-cms";
 
 const config = loadConfigSync();
-const rules = buildAllContentRedirects(createProject(config), {
-  prefixedLocales: ["fr", "de"],   // locales served under /<locale>/...
+const project = createProject(config);
+const urlBuilder = createUrlBuilder(project.config);
+const rules = buildAllContentRedirects(project, {
+  prefixedLocales: urlBuilder.prefixedLocales,
 });
 // [{ source, destination, permanent: true }, ...]
 // Matches Next.js redirect config directly; map to nginx rules, _redirects,
@@ -224,8 +230,9 @@ writeStaticRawExports(createProject(loadConfigSync()), { outDir: "public" });
 ```
 
 `getStaticExportRoots(project)` returns managed directory roots to clean
-before writing (e.g. `blog/`, `fr/blog/`). Redirected (`redirect_to`) documents
-are excluded by default; `noindex` documents are included.
+before writing (e.g. `blog/`, `fr/blog/`). Documents listed as redirect sources
+in `_redirects.json` are skipped when `excludeRedirected` is true (default).
+`noindex` documents are included unless `excludeNoindex` is set.
 
 ## Escape hatch
 

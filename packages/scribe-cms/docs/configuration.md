@@ -13,6 +13,7 @@ export default defineConfig({
   store: ".scribe/store.sqlite",     // default
   locales: ["en", "fr", "de"],
   defaultLocale: "en",              // default
+  localeRouting: { strategy: "path-prefix", prefixDefaultLocale: false },
   localePresets: { active: ["fr"] },
   translate: { /* see Translation docs */ },
   types: [ /* defineContentType(...) */ ],
@@ -26,6 +27,7 @@ export default defineConfig({
 | `store` | `".scribe/store.sqlite"` | SQLite translation store. **Commit it — do not gitignore `.scribe/`.** |
 | `locales` | — (required) | All locales, including the default one. |
 | `defaultLocale` | `"en"` | Canonical source locale. Must appear in `locales`. |
+| `localeRouting` | `{ strategy: "path-prefix", prefixDefaultLocale: false }` | How locale markers appear in generated URLs. `path-prefix` prepends `/{locale}` (omit for default locale when `prefixDefaultLocale` is false). `search-param` appends `?{param}={locale}` for non-default locales. |
 | `localePresets` | — | Named locale groups for `scribe translate --preset <name>`. |
 | `translate` | — | Project-wide translation defaults ([Translation](./translation.md)). |
 | `types` | — (required) | Content type definitions. |

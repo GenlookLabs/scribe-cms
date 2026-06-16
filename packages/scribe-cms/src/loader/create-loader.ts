@@ -92,6 +92,7 @@ export function parseEnMdx(
     },
     type,
     config.defaultLocale,
+    config.localeRouting,
   );
 
   const crossIssues = type.crossValidate?.(result.data as z.infer<typeof type.schema>, {
@@ -107,8 +108,6 @@ export function parseEnMdx(
     slug,
     enSlug: slug,
     locale: config.defaultLocale,
-    aliases: builtin.aliases,
-    redirectTo: builtin.redirectTo,
     publishedAt: builtin.publishedAt,
     updatedAt: builtin.updatedAt,
     noindex: builtin.noindex,
@@ -131,6 +130,7 @@ function buildDocumentFromTranslation(
   },
   enDoc: ScribeDocument,
   type: ContentTypeConfig,
+  config: ScribeConfig,
 ): ScribeDocument {
   const localeFm = JSON.parse(row.frontmatter_json) as Record<string, unknown>;
   const merged = mergeStructuralOntoLocale(localeFm, enDoc.frontmatter, type.schema);
@@ -139,15 +139,14 @@ function buildDocumentFromTranslation(
     merged,
     { ...seo, slug: row.slug, locale: row.locale },
     type,
-    enDoc.locale,
+    config.defaultLocale,
+    config.localeRouting,
   );
 
   return {
     slug: row.slug,
     enSlug: row.en_slug,
     locale: row.locale,
-    aliases: [],
-    redirectTo: seo.redirectTo,
     publishedAt: seo.publishedAt,
     updatedAt: seo.updatedAt,
     noindex: seo.noindex,
@@ -232,7 +231,7 @@ export function createContentLoader(config: ScribeConfig, type: ContentTypeConfi
       for (const row of rowsByLocale.get(locale) ?? []) {
         const enDoc = englishBySlug.get(row.en_slug);
         if (!enDoc) continue;
-        const doc = buildDocumentFromTranslation(row, enDoc, type);
+        const doc = buildDocumentFromTranslation(row, enDoc, type, config);
         bySlug.set(doc.slug, doc);
         byEnSlug.set(row.en_slug, doc);
       }

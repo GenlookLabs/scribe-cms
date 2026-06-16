@@ -11,7 +11,7 @@ Scribe is a typed, file-based CMS for multilingual MDX sites.
 
 1. [Getting started](./getting-started.md) — install, first config, first page
 2. [Configuration](./configuration.md) — `scribe.config.ts` reference
-3. [Writing content](./content.md) — files, frontmatter, built-in fields, aliases & redirects
+3. [Writing content](./content.md) — files, frontmatter, built-in fields, redirects
 4. [Runtime API](./runtime-api.md) — reading content, routing helpers, relations, sitemap, framework integration
 5. [Translation](./translation.md) — the translate workflow, CLI, and studio
 

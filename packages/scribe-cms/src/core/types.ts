@@ -46,6 +46,11 @@ export interface LocalePresets {
   [name: string]: string[] | undefined;
 }
 
+/** How non-default locales appear in generated URLs. */
+export type LocaleRoutingConfig =
+  | { strategy: "path-prefix"; prefixDefaultLocale?: boolean }
+  | { strategy: "search-param"; param: string };
+
 /** Per-content-type translation settings (merged over the project-level defaults). */
 export interface TranslateConfig {
   /** Replace the default system prompt entirely. */
@@ -125,6 +130,8 @@ export interface ScribeConfigInput<
   locales: string[];
   /** Canonical source locale. Must be in `locales`. Default: `"en"`. */
   defaultLocale?: string;
+  /** How locale markers are applied to generated URLs. Default: path-prefix without default locale. */
+  localeRouting?: LocaleRoutingConfig;
   localePresets?: LocalePresets;
   translate?: ScribeTranslateDefaults;
   types: TTypes;
@@ -143,6 +150,7 @@ export interface ScribeConfig {
   assetsPath?: string;
   locales: string[];
   defaultLocale: string;
+  localeRouting: LocaleRoutingConfig;
   localePresets?: LocalePresets;
   translate?: ScribeTranslateDefaults;
   types: ContentTypeConfig[];
@@ -155,10 +163,6 @@ export interface ScribeDocument<TFrontmatter = Record<string, unknown>> {
   /** Slug of the EN (default-locale) parent. Equal to `slug` for EN documents. */
   enSlug: string;
   locale: string;
-  /** Inbound slug aliases (EN canonical docs only). */
-  aliases: string[];
-  /** Outbound retirement redirect, e.g. `/blog/successor-slug`. */
-  redirectTo?: string;
   publishedAt?: string;
   updatedAt?: string;
   noindex: boolean;

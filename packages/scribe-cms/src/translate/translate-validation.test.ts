@@ -100,7 +100,6 @@ describe("validateTranslatedFrontmatter", () => {
     slug: "free",
     enSlug: "free",
     locale: "en",
-    aliases: [],
     noindex: false,
     frontmatter: {
       priceMonthlyUsd: 0,

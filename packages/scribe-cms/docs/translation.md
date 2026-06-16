@@ -24,7 +24,7 @@ content it was made from. `scribe translate` re-translates a page only when:
 - no translation exists for that locale (**missing**), or
 - the English translatable content changed since (**stale**).
 
-Editing a structural field, an alias, or `redirect_to` does **not** mark
+Editing a structural field or a `_redirects.json` entry does **not** mark
 translations stale — those fields aren't translated.
 
 ## Running it
@@ -113,7 +113,7 @@ scribe translate --preset ultraLight
 | ------------------------------------------ | ------------------------------------------------------------------------------- |
 | `scribe status`                            | English doc counts + per-locale translation counts.                             |
 | `scribe version`                           | Print installed scribe-cms version.                                           |
-| `scribe validate`                          | Schemas, relations, aliases, slugs, assets. Non-zero exit on errors. |
+| `scribe validate`                          | Schemas, relations, redirects, slugs, assets. Non-zero exit on errors. |
 | `scribe translate [flags]`                 | Translate missing/stale pages. Flags above.                                     |
 | `scribe history <type> <en-slug> [locale]` | Revision timeline.                                                              |
 | `scribe studio [--port 3600]`              | Local read-only admin UI.                                                       |

@@ -59,8 +59,8 @@ export default defineConfig({
 
 Content lives in `content/blog/*.mdx` and `content/authors/*.mdx`. The file
 name is the EN slug. Frontmatter is validated against the schema; the built-in
-fields `publishedAt`, `updatedAt`, `noindex`, `aliases`, `redirect_to`, and
-`canonicalPath` are available on every type without declaring them.
+fields `publishedAt`, `updatedAt`, `noindex`, and `canonicalPath` are available
+on every type without declaring them. Redirects live in `content/<type>/_redirects.json`.
 
 ### 2. Field markers
 
@@ -82,7 +82,7 @@ const scribe = createScribe(config);
 // Lists & lookups
 scribe.blog.list("fr");                       // sorted docs for a locale
 scribe.blog.get("my-post");                   // exact slug lookup, no fallback
-const r = scribe.blog.resolve("my-post", "fr"); // aliases + redirects + EN fallback
+const r = scribe.blog.resolve("my-post", "fr"); // cross-locale slug fix + EN fallback
 // r = { document, actualLocale, shouldRedirectTo?, canonicalPath? }
 
 // Routing helpers
@@ -105,7 +105,7 @@ are inferred from the config — no codegen.
 
 ```bash
 scribe status                  # EN docs + translation coverage
-scribe validate                # schemas, relations, aliases, sqlite consistency
+scribe validate                # schemas, relations, redirects, sqlite consistency
 scribe translate --locale fr   # translate stale/missing pages (Gemini)
 scribe translate --preset active
 scribe history blog my-post fr # revision timeline
@@ -127,7 +127,7 @@ The short version:
   (e.g. Next.js `serverExternalPackages`, Vite `ssr.external`).
 - Gate builds: `"build": "scribe validate && <your framework build>"`.
 - Redirects: `buildAllContentRedirects(project)` produces
-  `{ source, destination, permanent }` rules from aliases, `redirect_to`, and
+  `{ source, destination, permanent }` rules from `_redirects.json` and
   cross-locale slugs — map them to your framework's redirect config.
 
 **Site & examples:** [scribe.genlook.app](https://scribe.genlook.app) · [Example Next.js app](https://github.com/GenlookLabs/scribe-cms/tree/main/apps/web)

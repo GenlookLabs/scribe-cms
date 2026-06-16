@@ -1,5 +1,5 @@
 import type { ScribeProject } from "../core/types.js";
-import { isRoutableType, pathPrefix, resolvePath } from "../i18n/build-url.js";
+import { isRoutableType, pathPrefix, createUrlBuilder } from "../i18n/build-url.js";
 import { serializeMdx } from "../loader/parse-mdx.js";
 
 export interface StaticRawExport {
@@ -77,6 +77,7 @@ export function buildStaticRawExports(
   const typeFilter = options.types ? new Set(options.types) : null;
 
   const out: StaticRawExport[] = [];
+  const urlBuilder = createUrlBuilder(config);
 
   for (const type of project.listTypes()) {
     if (!isRoutableType(type.config)) continue;
@@ -96,7 +97,7 @@ export function buildStaticRawExports(
 
         const doc = resolved.document;
         const slugWithExt = `${doc.slug}${extension}`;
-        const urlPath = resolvePath(pathTemplate, slugWithExt, locale, config.defaultLocale);
+        const urlPath = urlBuilder.resolvePath(pathTemplate, slugWithExt, locale);
 
         out.push({
           relativePath: urlPath.slice(1),

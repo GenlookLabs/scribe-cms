@@ -8,6 +8,7 @@ One document = one `.mdx` (or `.md`) file in the type's folder:
 content/
   blog/
     hello-world.mdx        → slug "hello-world"
+    _redirects.json        → redirect rules for this type (optional)
   authors/
     jane.mdx               → slug "jane"
 ```
@@ -48,8 +49,6 @@ schema runs):
 | `publishedAt` | ISO date | Publication date. |
 | `updatedAt` | ISO date | Last significant update. Defaults to `publishedAt`. Drives sitemap `lastModified`. |
 | `noindex` | boolean | Excluded from the sitemap; expose it as a robots meta tag in your pages. |
-| `aliases` | string[] | Old slugs for this document (see below). Max 20. |
-| `redirect_to` | string | Retire this document with a redirect to a successor path (must match the type's `path` template). |
 | `canonicalPath` | string | Manually override the canonical URL path. |
 
 Locale documents inherit `publishedAt`, `updatedAt`, `noindex`, and
@@ -58,36 +57,45 @@ Locale documents inherit `publishedAt`, `updatedAt`, `noindex`, and
 Every loaded document also carries `slug`, `enSlug` (the English parent slug;
 equal to `slug` for English documents), `locale`, `frontmatter`, and `content`.
 
-## Renaming a document: aliases
+## Redirects: `_redirects.json`
 
-To rename `hello-world` to `hello-scribe` without breaking links:
+Per content-type folder, add an optional `_redirects.json` file to declare
+slug migrations and retired documents. Redirects survive after you delete the
+source MDX — translated source slugs are expanded automatically from SQLite.
 
-1. Rename the file to `hello-scribe.mdx`.
-2. Add the old slug to `aliases`:
-
-```yaml
-aliases:
-  - hello-world
+```json
+{
+  "redirects": [
+    { "from": "hello-world", "toSlug": "hello-scribe" },
+    { "from": ["old-a", "old-b"], "toSlug": "hello-scribe" },
+    { "from": "moved-post", "toType": "glossary", "toSlug": "virtual-try-on" },
+    { "from": "retired-page", "toUrl": "/pricing" },
+    { "from": "retired-ext", "toUrl": "https://example.com/app" }
+  ]
+}
 ```
 
-`resolve("hello-world", locale)` now returns
-`shouldRedirectTo: "/blog/hello-scribe"` (localized when a translation exists),
-and `buildAllContentRedirects()` emits a permanent redirect rule for it.
-Existing translations are re-attached to the new slug. `scribe validate`
-catches alias collisions and circular chains.
+Three redirect kinds (exactly one target per entry):
 
-## Retiring a document: `redirect_to`
+| Kind | Fields | Description |
+| --- | --- | --- |
+| Same-type | `toSlug` | Target EN slug in the same content type. URL built from this type's `path`, localized per locale. |
+| Cross-type | `toType` + `toSlug` | Target EN slug in another routable content type (must have a `path`). |
+| Anywhere | `toUrl` | Root-relative same-site path or absolute external URL, identical for every locale. |
 
-To delete a page in favor of another one, keep a stub file containing only:
+- `from`: EN slug(s) only. Translated source slugs are resolved from SQLite.
+- Optional `permanent` (default `true`).
 
-```yaml
----
-redirect_to: /blog/the-newer-better-post
----
-```
+### Agent workflow: retire or rename a document
 
-The document stops rendering and resolves to a permanent redirect instead. It
-is excluded from `list()` consumers' sitemaps via `generateSitemap()`.
+1. Add an entry to `content/<type>/_redirects.json`.
+2. Delete (or rename) the source MDX.
+3. Run `scribe validate` then rebuild. Redirect rules are emitted by
+   `buildAllContentRedirects()` for your proxy or Next.js config.
+
+`scribe validate` checks: JSON schema, routable source/target types, live
+target documents, no duplicate `from` slugs, and no `from` slug with a live MDX
+file still on disk.
 
 ## Validation
 
@@ -97,7 +105,7 @@ scribe validate
 
 Checks, per English file: schema parse, built-in field shapes, your
 `crossValidate` hook, relation integrity (dangling required relation = error,
-dangling optional relation = warning), alias collisions and redirect chains,
-localized-slug suffix rules, and missing image assets when `assetsDir` is set.
+dangling optional relation = warning), `_redirects.json` rules, localized-slug
+suffix rules, and missing image assets when `assetsDir` is set.
 
 Exit code is non-zero when any error is found — run it before your build.

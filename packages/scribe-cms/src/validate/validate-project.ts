@@ -2,11 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ScribeConfig } from "../core/types.js";
 import { createProject } from "../create-project.js";
-import {
-  buildGlobalAliasIndex,
-  validateAliasCoverage,
-  validateAliasRedirectChains,
-} from "../core/slug-aliases.js";
+import { validateTypeRedirects } from "./validate-redirects.js";
 import { validateLocaleBuiltinFields } from "../core/builtin-fields.js";
 import { readEnDocument } from "../loader/create-loader.js";
 import { isPublishableContentFile } from "../loader/normalize-en.js";
@@ -150,35 +146,8 @@ export function validateProject(config: ScribeConfig): ValidateResult {
 
   db.close();
 
-  const aliasIndex = buildGlobalAliasIndex(project);
-  for (const issue of aliasIndex.issues) {
-    issues.push({
-      level: issue.level,
-      contentType: issue.contentTypeId,
-      enSlug: issue.enSlug,
-      field: issue.field,
-      message: issue.message,
-    });
-  }
-
-  for (const issue of validateAliasRedirectChains(project)) {
-    issues.push({
-      level: issue.level,
-      contentType: issue.contentTypeId,
-      enSlug: issue.enSlug,
-      field: issue.field,
-      message: issue.message,
-    });
-  }
-
-  for (const issue of validateAliasCoverage(project)) {
-    issues.push({
-      level: issue.level,
-      contentType: issue.contentTypeId,
-      enSlug: issue.enSlug,
-      field: issue.field,
-      message: issue.message,
-    });
+  for (const issue of validateTypeRedirects(project)) {
+    issues.push(issue);
   }
 
   for (const issue of validateRelations(project)) {

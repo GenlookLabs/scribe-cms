@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.0.9 — 2026-06-16
+
+### Added
+
+- Per-content-type `_redirects.json` for slug migrations and retired documents — supports same-type (`toSlug`), cross-type (`toType` + `toSlug`), and anywhere (`toUrl`, relative or absolute) redirects
+- Redirects auto-expand to translated slugs from SQLite and survive after the source MDX is deleted
+- `localeRouting` config (`path-prefix` with optional `prefixDefaultLocale`, or `search-param`) and `createUrlBuilder()` for config-driven locale-aware URL generation
+- `createUrlBuilder` and `UrlBuilder` exported from `scribe-cms` and `scribe-cms/runtime`
+
+### Changed
+
+- All internal URL generation (redirects, alternates, sitemap, runtime `url()`) routes through `createUrlBuilder()` instead of hardcoded `/${locale}` prefixing
+
+### Removed
+
+- Frontmatter `aliases` and `redirect_to` — migrate to `content/<type>/_redirects.json`; `scribe validate` errors if they are still present
+- Alias SQLite tracking and `slug-aliases` validation helpers
+
 ## 0.0.8 — 2026-06-16
 
 ### Added

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { extractSlugFromResolvedPath, pathPrefix, pathSuffix, resolvePath } from "../i18n/build-url.js";
-import type { ContentTypeConfig, ScribeDocument } from "./types.js";
+import { createUrlBuilder, pathPrefix, pathSuffix } from "../i18n/build-url.js";
+import type { ContentTypeConfig, LocaleRoutingConfig, ScribeDocument } from "./types.js";
 
 export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -15,8 +15,6 @@ export const isoDateSchema = z
 const canonicalPathSchema = z.string().regex(/^\//, "canonicalPath must start with /");
 
 export interface BuiltinEnFields {
-  aliases: string[];
-  redirectTo?: string;
   publishedAt?: string;
   updatedAt?: string;
   noindex: boolean;
@@ -41,12 +39,23 @@ const LOCALE_BUILTIN_KEYS: Array<[string, string]> = [
   ["enSlug", "enSlug is internal; remove from locale translation"],
 ];
 
-/** Extract built-in EN frontmatter (aliases, dates, SEO) before Zod validation. */
+const DEPRECATED_REDIRECT_FIELDS: Array<[string, string]> = [
+  [
+    "aliases",
+    "aliases frontmatter is removed — add redirects to content/<type>/_redirects.json instead",
+  ],
+  [
+    "redirect_to",
+    "redirect_to frontmatter is removed — add redirects to content/<type>/_redirects.json instead",
+  ],
+];
+
+/** Extract built-in EN frontmatter (dates, SEO) before Zod validation. */
 export function extractBuiltinEnFields(
   data: Record<string, unknown>,
-  pathTemplate: string | undefined,
-  enSlug: string,
-  defaultLocale: string,
+  _pathTemplate: string | undefined,
+  _enSlug: string,
+  _defaultLocale: string,
 ): {
   builtin: BuiltinEnFields;
   rest: Record<string, unknown>;
@@ -55,45 +64,10 @@ export function extractBuiltinEnFields(
   const issues: BuiltinParseIssue[] = [];
   const rest = { ...data };
 
-  const aliasesResult = z.array(slugPatternSchema).max(20).optional().default([]).safeParse(rest.aliases ?? []);
-  delete rest.aliases;
-
-  const redirectRaw = rest.redirect_to;
-  delete rest.redirect_to;
-
-  let redirectTo: string | undefined;
-  if (redirectRaw !== undefined && redirectRaw !== null && redirectRaw !== "") {
-    if (typeof redirectRaw !== "string") {
-      issues.push({
-        field: "redirect_to",
-        message: "redirect_to must be a string path",
-        level: "error",
-      });
-    } else if (!pathTemplate) {
-      issues.push({
-        field: "redirect_to",
-        message: "redirect_to is not allowed on reference-only content types",
-        level: "error",
-      });
-    } else if (!extractSlugFromResolvedPath(pathTemplate, redirectRaw)) {
-      issues.push({
-        field: "redirect_to",
-        message: `redirect_to must match path template "${pathTemplate}" (prefix "${pathPrefix(pathTemplate)}"${pathSuffix(pathTemplate) ? `, suffix "${pathSuffix(pathTemplate)}"` : ""})`,
-        level: "error",
-      });
-    } else {
-      redirectTo = redirectRaw;
-    }
-  }
-
-  const aliases = aliasesResult.success ? aliasesResult.data : [];
-  if (!aliasesResult.success) {
-    for (const issue of aliasesResult.error.issues) {
-      issues.push({
-        field: `aliases.${issue.path.join(".")}`,
-        message: issue.message,
-        level: "error",
-      });
+  for (const [field, message] of DEPRECATED_REDIRECT_FIELDS) {
+    if (rest[field] !== undefined) {
+      issues.push({ field, message, level: "error" });
+      delete rest[field];
     }
   }
 
@@ -161,8 +135,6 @@ export function extractBuiltinEnFields(
 
   return {
     builtin: {
-      aliases,
-      redirectTo,
       publishedAt,
       updatedAt,
       noindex,
@@ -200,13 +172,19 @@ export function resolveCanonicalPathname(
   type: Pick<ContentTypeConfig, "path">,
   doc: Pick<ScribeDocument, "slug" | "locale" | "canonicalPathOverride">,
   defaultLocale: string,
+  localeRouting?: LocaleRoutingConfig,
 ): string {
+  const urlBuilder = createUrlBuilder({
+    locales: [defaultLocale, ...(doc.locale !== defaultLocale ? [doc.locale] : [])],
+    defaultLocale,
+    localeRouting: localeRouting ?? { strategy: "path-prefix", prefixDefaultLocale: false },
+  });
+
   if (doc.canonicalPathOverride) {
-    if (doc.locale === defaultLocale) return doc.canonicalPathOverride;
-    return `/${doc.locale}${doc.canonicalPathOverride}`;
+    return urlBuilder.applyLocaleToPath(doc.canonicalPathOverride, doc.locale);
   }
   if (!type.path) return `/${doc.slug}`;
-  return resolvePath(type.path, doc.slug, doc.locale, defaultLocale);
+  return urlBuilder.resolvePath(type.path, doc.slug, doc.locale);
 }
 
 /** Hydrate locale frontmatter with EN-only built-in fields at load time. */
@@ -218,24 +196,26 @@ export function mergeBuiltinsIntoFrontmatter(
   >,
   type: Pick<ContentTypeConfig, "path">,
   defaultLocale: string,
+  localeRouting?: LocaleRoutingConfig,
 ): Record<string, unknown> {
   const out = { ...frontmatter };
   if (doc.publishedAt !== undefined) out.publishedAt = doc.publishedAt;
   if (doc.updatedAt !== undefined) out.updatedAt = doc.updatedAt;
   out.noindex = doc.noindex;
-  out.canonicalPath = resolveCanonicalPathname(type, doc, defaultLocale);
+  out.canonicalPath = resolveCanonicalPathname(type, doc, defaultLocale, localeRouting);
   return out;
 }
 
 export function seoFieldsFromEn(enDoc: ScribeDocument): Pick<
   ScribeDocument,
-  "publishedAt" | "updatedAt" | "noindex" | "canonicalPathOverride" | "redirectTo"
+  "publishedAt" | "updatedAt" | "noindex" | "canonicalPathOverride"
 > {
   return {
     publishedAt: enDoc.publishedAt,
     updatedAt: enDoc.updatedAt,
     noindex: enDoc.noindex,
     canonicalPathOverride: enDoc.canonicalPathOverride,
-    redirectTo: enDoc.redirectTo,
   };
 }
+
+export { pathPrefix, pathSuffix };

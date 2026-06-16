@@ -45,6 +45,14 @@ export function resolveConfig(
     );
   }
 
+  const localeRouting = raw.localeRouting ?? {
+    strategy: "path-prefix" as const,
+    prefixDefaultLocale: false,
+  };
+  if (localeRouting.strategy === "search-param" && !localeRouting.param) {
+    throw new Error('scribe config: localeRouting search-param requires a "param" name');
+  }
+
   const projectRoot = path.resolve(baseDir ?? process.cwd(), raw.rootDir);
   const contentRoot = path.resolve(projectRoot, raw.contentDir ?? "content");
   const storePath = path.resolve(projectRoot, raw.store ?? ".scribe/store.sqlite");
@@ -74,6 +82,7 @@ export function resolveConfig(
     assetsPath,
     locales: [...raw.locales],
     defaultLocale,
+    localeRouting,
     localePresets: raw.localePresets,
     translate: raw.translate,
     types,

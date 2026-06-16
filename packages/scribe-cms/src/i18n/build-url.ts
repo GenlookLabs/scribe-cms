@@ -1,4 +1,4 @@
-import type { ContentTypeConfig } from "../core/types.js";
+import type { ContentTypeConfig, LocaleRoutingConfig, ScribeConfig } from "../core/types.js";
 
 const SLUG_PLACEHOLDER = "{slug}";
 
@@ -34,25 +34,124 @@ export function pathSuffix(template: string): string {
   return template.slice(idx + SLUG_PLACEHOLDER.length);
 }
 
+function resolveDefaultLocaleRouting(): LocaleRoutingConfig {
+  return { strategy: "path-prefix", prefixDefaultLocale: false };
+}
+
+function splitPathAndSearch(pathname: string): { pathname: string; search: string } {
+  const q = pathname.indexOf("?");
+  if (q === -1) return { pathname, search: "" };
+  return { pathname: pathname.slice(0, q), search: pathname.slice(q) };
+}
+
+export interface UrlBuilder {
+  defaultLocale: string;
+  locales: readonly string[];
+  localeRouting: LocaleRoutingConfig;
+  /** Locales that receive a non-default locale marker in generated URLs. */
+  prefixedLocales: string[];
+  resolvePath: (template: string, slug: string, locale: string) => string;
+  extractSlugFromResolvedPath: (template: string, resolvedPath: string) => string | null;
+  /** Apply locale routing to an already-resolved pathname (e.g. canonicalPath override). */
+  applyLocaleToPath: (pathname: string, locale: string) => string;
+}
+
+/** Create a locale-aware URL builder from a resolved Scribe config. */
+export function createUrlBuilder(config: Pick<ScribeConfig, "locales" | "defaultLocale" | "localeRouting">): UrlBuilder {
+  const localeRouting = config.localeRouting ?? resolveDefaultLocaleRouting();
+  const defaultLocale = config.defaultLocale;
+  const prefixedLocales =
+    localeRouting.strategy === "path-prefix"
+      ? localeRouting.prefixDefaultLocale
+        ? [...config.locales]
+        : config.locales.filter((locale) => locale !== defaultLocale)
+      : config.locales.filter((locale) => locale !== defaultLocale);
+
+  function applyLocaleToPath(pathname: string, locale: string): string {
+    if (locale === defaultLocale) {
+      if (localeRouting.strategy === "path-prefix" && localeRouting.prefixDefaultLocale) {
+        return `/${defaultLocale}${pathname}`;
+      }
+      return pathname;
+    }
+
+    if (localeRouting.strategy === "search-param") {
+      const { pathname: base, search } = splitPathAndSearch(pathname);
+      const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+      params.set(localeRouting.param, locale);
+      const qs = params.toString();
+      return qs ? `${base}?${qs}` : base;
+    }
+
+    return `/${locale}${pathname}`;
+  }
+
+  function resolvePath(template: string, slug: string, locale: string): string {
+    const relative = template.replace(SLUG_PLACEHOLDER, slug);
+    return applyLocaleToPath(relative, locale);
+  }
+
+  function extractSlugFromResolvedPath(template: string, resolvedPath: string): string | null {
+    let pathname = resolvedPath;
+    if (localeRouting.strategy === "search-param") {
+      pathname = splitPathAndSearch(resolvedPath).pathname;
+    } else if (localeRouting.strategy === "path-prefix") {
+      for (const locale of config.locales) {
+        if (locale === defaultLocale && !localeRouting.prefixDefaultLocale) continue;
+        const prefix = `/${locale}`;
+        if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
+          pathname = pathname.slice(prefix.length) || "/";
+          break;
+        }
+      }
+    }
+
+    const prefix = pathPrefix(template);
+    const suffix = pathSuffix(template);
+    if (!pathname.startsWith(prefix)) return null;
+    if (suffix && !pathname.endsWith(suffix)) return null;
+    const slugEnd = suffix ? pathname.length - suffix.length : pathname.length;
+    const slug = pathname.slice(prefix.length, slugEnd);
+    return slug.length > 0 ? slug : null;
+  }
+
+  return {
+    defaultLocale,
+    locales: config.locales,
+    localeRouting,
+    prefixedLocales,
+    resolvePath,
+    extractSlugFromResolvedPath,
+    applyLocaleToPath,
+  };
+}
+
 /** Build a locale-aware pathname from a path template and slug. */
 export function resolvePath(
   template: string,
   slug: string,
   locale: string,
   defaultLocale: string,
+  localeRouting?: LocaleRoutingConfig,
 ): string {
-  const relative = template.replace(SLUG_PLACEHOLDER, slug);
-  if (locale === defaultLocale) return relative;
-  return `/${locale}${relative}`;
+  const builder = createUrlBuilder({
+    locales: [defaultLocale, ...(locale !== defaultLocale ? [locale] : [])],
+    defaultLocale,
+    localeRouting: localeRouting ?? resolveDefaultLocaleRouting(),
+  });
+  return builder.resolvePath(template, slug, locale);
 }
 
 /** Extract slug from a resolved path that matches the template. */
-export function extractSlugFromResolvedPath(template: string, resolvedPath: string): string | null {
-  const prefix = pathPrefix(template);
-  const suffix = pathSuffix(template);
-  if (!resolvedPath.startsWith(prefix)) return null;
-  if (suffix && !resolvedPath.endsWith(suffix)) return null;
-  const slugEnd = suffix ? resolvedPath.length - suffix.length : resolvedPath.length;
-  const slug = resolvedPath.slice(prefix.length, slugEnd);
-  return slug.length > 0 ? slug : null;
+export function extractSlugFromResolvedPath(
+  template: string,
+  resolvedPath: string,
+  localeRouting?: LocaleRoutingConfig,
+): string | null {
+  const builder = createUrlBuilder({
+    locales: [],
+    defaultLocale: "en",
+    localeRouting: localeRouting ?? resolveDefaultLocaleRouting(),
+  });
+  return builder.extractSlugFromResolvedPath(template, resolvedPath);
 }
