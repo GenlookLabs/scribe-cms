@@ -1,0 +1,8 @@
+---
+version: "0.0.10"
+publishedAt: "2026-06-16"
+---
+
+## Fixed
+
+- Cross-type redirects with the same EN slug in `from` and `toSlug` (e.g. a retired blog post → changelog entry) now pass `scribe validate` instead of being rejected as self-redirects or chains

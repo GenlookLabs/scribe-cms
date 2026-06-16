@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.10 — 2026-06-16
+
+### Fixed
+
+- `scribe validate` allows cross-type redirects where `from` and `toSlug` share the same EN slug (e.g. blog → changelog migrations)
+- Redirect chain detection no longer false-positives on those same-slug cross-type entries
+
 ## 0.0.9 — 2026-06-16
 
 ### Added
