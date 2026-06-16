@@ -19,7 +19,7 @@ function slugStrategyRules(
 ): string[] {
   if (slugStrategy === "localized") {
     const rules = [
-      "Provide a URL slug in JSON field `slug` that is TRANSLATED into the target language.",
+      "Provide a URL slug in JSON field `slug` that is Localized into the target language.",
       "Base the slug on the meaning of the translated title — do NOT reuse the English slug words.",
       "Slug MUST be ASCII only: a-z, 0-9, hyphens. No uppercase, accents, underscores, or spaces.",
       "For non-Latin languages, write the words in the target language and transliterate them into Latin script (e.g. Russian -> romanized Russian, not English).",
