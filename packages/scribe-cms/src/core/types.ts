@@ -323,6 +323,7 @@ export type Scribe<TTypes extends readonly ContentTypeInput<any>[]> = {
   project: ScribeProject;
   getType: ScribeProject["getType"];
   listTypes: ScribeProject["listTypes"];
+  listRoutableTypes: ScribeProject["listRoutableTypes"];
 };
 
 /** Typed client type from a config object type (for app-side type aliases). */
@@ -337,6 +338,8 @@ export interface ScribeProject {
   storePath: string;
   getType: (id: string) => ContentTypeRuntime;
   listTypes: () => ContentTypeRuntime[];
+  /** Content types with a `path` template (public URLs, hreflang, sitemap). */
+  listRoutableTypes: () => ContentTypeRuntime[];
 }
 
 /** Identity helper that preserves content-type id and schema inference. */

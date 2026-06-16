@@ -11,7 +11,7 @@ import type {
 import { listRelationFields, type SchemaFieldMeta } from "./core/introspect-schema.js";
 import { createContentLoader } from "./loader/create-loader.js";
 import { resolveLocalizedDocument } from "./i18n/resolve-document.js";
-import { resolvePath } from "./i18n/build-url.js";
+import { isRoutableType, resolvePath } from "./i18n/build-url.js";
 
 function comparatorFor(orderBy: OrderBy): (a: ScribeDocument, b: ScribeDocument) => number {
   if (typeof orderBy === "function") return orderBy;
@@ -215,6 +215,9 @@ export function createProject(config: ScribeConfig): ScribeProject {
     getType: getRuntime,
     listTypes() {
       return Array.from(runtimes.values());
+    },
+    listRoutableTypes() {
+      return Array.from(runtimes.values()).filter((runtime) => isRoutableType(runtime.config));
     },
   };
 }

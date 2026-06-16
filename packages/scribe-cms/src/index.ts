@@ -38,6 +38,7 @@ export type {
 } from "./core/types.js";
 export { createScribe } from "./create-scribe.js";
 export { createProject } from "./create-project.js";
+export { isRoutableType } from "./i18n/build-url.js";
 export { resolveConfig, isResolvedConfig } from "./config/resolve-config.js";
 export { loadConfigSync, findConfigPath } from "./config/load-config.js";
 export { validateProject } from "./validate/validate-project.js";

@@ -27,6 +27,7 @@ export function createScribe<const TTypes extends readonly ContentTypeInput<any>
     project,
     getType: project.getType,
     listTypes: project.listTypes,
+    listRoutableTypes: project.listRoutableTypes,
     sitemap(options: GenerateSitemapOptions) {
       return generateSitemap(project, options);
     },
