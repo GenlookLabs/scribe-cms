@@ -4,6 +4,7 @@ caption: "Read content with a typed client — list, resolve, and follow relatio
 language: ts
 order: 4
 ---
+```ts
 import { createScribe } from "scribe-cms/runtime";
 import config from "./scribe.config";
 
@@ -12,3 +13,4 @@ const scribe = createScribe(config);
 const posts = scribe.blog.list("fr");
 const { document } = scribe.blog.resolve("hello-world", "fr");
 const author = scribe.blog.related(document!, "author");
+```

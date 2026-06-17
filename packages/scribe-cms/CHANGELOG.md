@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.12 — 2026-06-17
+
+### Fixed
+
+- Gemini response parsing no longer corrupts JSON whose translated body contains a Markdown code fence (e.g. ```ts blocks) — the payload is parsed directly instead of greedily extracting the first fence
+
+### Changed
+
+- `scribe validate` now MDX-validates EN source bodies in addition to stored translations, so invalid MDX is caught at the source
+
 ## 0.0.11 — 2026-06-16
 
 ### Added

@@ -1,0 +1,12 @@
+---
+version: "0.0.12"
+publishedAt: "2026-06-17"
+---
+
+## Fixed
+
+- Translating content whose body contains a Markdown code fence no longer fails JSON parsing — fenced code in translated bodies is preserved
+
+## Changed
+
+- `scribe validate` now MDX-validates EN source bodies in addition to stored translations, so invalid MDX is caught at the source

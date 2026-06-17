@@ -7,6 +7,11 @@ import { getOpenGraphLocale } from "@/lib/locale";
 import { buildLanguageAlternates } from "@/lib/metadata-alternates";
 import { getScribe } from "@/lib/scribe";
 
+function stripCodeFence(content: string): string {
+  const m = content.trim().match(/^```[^\n]*\n([\s\S]*?)\n```$/);
+  return m ? m[1] : content.trim();
+}
+
 type Props = {
   params: Promise<{ locale: string }>;
 };
@@ -53,7 +58,10 @@ export default async function ExamplesPage({ params }: Props) {
                 <h2 className="example-title">{doc.frontmatter.title}</h2>
                 <p className="example-caption">{doc.frontmatter.caption}</p>
               </div>
-              <CodeBlock code={doc.content} language={doc.frontmatter.language} />
+              <CodeBlock
+                code={stripCodeFence(doc.content)}
+                language={doc.frontmatter.language}
+              />
             </section>
           ))}
         </div>

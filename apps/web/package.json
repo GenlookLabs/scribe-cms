@@ -3,9 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "node scripts/seed-translations.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/seed-translations.mjs",
     "translate": "scribe translate --type page --preset all --strategy missing-only --no-progress --concurrency 3 && scribe translate --type example --preset all --strategy missing-only --no-progress --concurrency 3 && scribe translate --type changelog --preset all --strategy missing-only --no-progress --concurrency 3",
     "build": "scribe validate && next build",
     "start": "next start",
@@ -14,7 +12,6 @@
   "dependencies": {
     "@next/third-parties": "^16.2.9",
     "better-sqlite3": "^11.10.0",
-    "gray-matter": "^4.0.3",
     "next": "^15.3.3",
     "next-intl": "^4.1.0",
     "react": "^19.1.0",

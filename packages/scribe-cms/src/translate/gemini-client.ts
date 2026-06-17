@@ -25,12 +25,30 @@ export interface GeminiTranslationResult {
 }
 
 function extractJson(text: string): string {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const trimmed = text.trim();
+  // Only strip a fence that wraps the entire payload, so fences inside string
+  // values (e.g. a translated MDX body with ```ts blocks) are left untouched.
+  const fenced = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/);
   if (fenced?.[1]) return fenced[1].trim();
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start >= 0 && end > start) return text.slice(start, end + 1);
-  return text.trim();
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start >= 0 && end > start) return trimmed.slice(start, end + 1);
+  return trimmed;
+}
+
+export function parseGeminiResponse(text: string): {
+  frontmatter: Record<string, unknown>;
+  body: string;
+  slug?: string;
+} {
+  // With responseMimeType "application/json" the payload is already pure JSON.
+  // Parse it directly first; only fall back to extraction when the model wraps
+  // or pads the JSON (extraction is fragile when the body contains code fences).
+  try {
+    return JSON.parse(text.trim());
+  } catch {
+    return JSON.parse(extractJson(text));
+  }
 }
 
 export async function translatePageWithGemini(input: {
@@ -59,11 +77,7 @@ export async function translatePageWithGemini(input: {
   });
 
   const raw = response.text ?? "";
-  const parsed = JSON.parse(extractJson(raw)) as {
-    frontmatter: Record<string, unknown>;
-    body: string;
-    slug?: string;
-  };
+  const parsed = parseGeminiResponse(raw);
 
   if (!parsed.frontmatter || typeof parsed.body !== "string") {
     throw new Error("Gemini response missing frontmatter/body");

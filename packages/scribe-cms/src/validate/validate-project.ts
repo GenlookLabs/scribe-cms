@@ -37,6 +37,29 @@ function listEnSlugs(rootDir: string, contentDir: string): string[] {
     .map((f) => f.replace(/\.(md|mdx)$/, ""));
 }
 
+function validateDocumentMdxBody(
+  issues: ValidateIssue[],
+  input: {
+    contentType: string;
+    enSlug: string;
+    locale: string;
+    body: string;
+  },
+): void {
+  const preparedBody = prepareTranslatedMdxBody(input.body).body;
+  const mdxValidation = validateMdxBody(preparedBody);
+  if (!mdxValidation.ok) {
+    issues.push({
+      level: "error",
+      contentType: input.contentType,
+      enSlug: input.enSlug,
+      locale: input.locale,
+      field: "body",
+      message: `Invalid MDX: ${mdxValidation.error}`,
+    });
+  }
+}
+
 /** Validate EN files, SQLite consistency, relations, aliases, slug rules, and assets. */
 export function validateProject(config: ScribeConfig): ValidateResult {
   const issues: ValidateIssue[] = [];
@@ -105,6 +128,13 @@ export function validateProject(config: ScribeConfig): ValidateResult {
         issues.push(issue);
       }
 
+      validateDocumentMdxBody(issues, {
+        contentType: type.id,
+        enSlug,
+        locale: config.defaultLocale,
+        body: enDoc.content,
+      });
+
       for (const locale of config.locales) {
         if (locale === config.defaultLocale) continue;
         const row = getTranslation(db, type.id, enSlug, locale);
@@ -133,17 +163,12 @@ export function validateProject(config: ScribeConfig): ValidateResult {
           issues.push(issue);
         }
 
-        const mdxValidation = validateMdxBody(preparedBody);
-        if (!mdxValidation.ok) {
-          issues.push({
-            level: "error",
-            contentType: type.id,
-            enSlug,
-            locale,
-            field: "body",
-            message: `Invalid MDX: ${mdxValidation.error}`,
-          });
-        }
+        validateDocumentMdxBody(issues, {
+          contentType: type.id,
+          enSlug,
+          locale,
+          body: row.body,
+        });
       }
     }
 
