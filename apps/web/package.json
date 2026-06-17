@@ -12,6 +12,7 @@
     "scribe": "scribe"
   },
   "dependencies": {
+    "@next/third-parties": "^16.2.9",
     "better-sqlite3": "^11.10.0",
     "gray-matter": "^4.0.3",
     "next": "^15.3.3",
