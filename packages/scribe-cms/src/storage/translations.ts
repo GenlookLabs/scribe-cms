@@ -179,6 +179,26 @@ export function countTranslations(db: Database.Database): number {
   return row.count;
 }
 
+export function countTranslationsByLocale(
+  db: Database.Database,
+): Array<{ locale: string; count: number }> {
+  return db
+    .prepare(
+      `SELECT locale, COUNT(*) as count FROM translations GROUP BY locale ORDER BY locale`,
+    )
+    .all() as Array<{ locale: string; count: number }>;
+}
+
+export function latestTranslationAtByLocale(
+  db: Database.Database,
+): Array<{ locale: string; latest: string }> {
+  return db
+    .prepare(
+      `SELECT locale, MAX(translated_at) as latest FROM translations GROUP BY locale`,
+    )
+    .all() as Array<{ locale: string; latest: string }>;
+}
+
 export function countStaleTranslations(
   db: Database.Database,
   contentType: string,

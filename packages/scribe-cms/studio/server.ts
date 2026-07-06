@@ -6,8 +6,10 @@ import { computePageEnHash } from "../src/hash/page-hash.js";
 import { getTranslatablePayload, readEnDocument } from "../src/loader/create-loader.js";
 import { openStore } from "../src/storage/sqlite.js";
 import {
+  countTranslations,
   getEnSnapshot,
   getTranslation,
+  latestTranslationAtByLocale,
   listTranslationsForLocale,
   type EnSnapshotRow,
 } from "../src/storage/translations.js";
@@ -327,12 +329,21 @@ function renderLayout(
     .tag { font-size: var(--fs-sm); color: var(--dim); margin-left: 6px; }
     .tag-warn { color: var(--stale); }
     .tag-err { color: var(--missing); }
+
+    /* dashboard */
+    .cards { display: flex; flex-wrap: wrap; gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
+    .card { flex: 1 1 120px; background: var(--bg); padding: 12px; min-width: 120px; }
+    .card-value { font-size: 22px; font-weight: 300; line-height: 1.2; }
+    .card-label { font-size: var(--fs-sm); color: var(--dim); margin-top: 2px; }
+    .bar { display: inline-block; width: 120px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; vertical-align: middle; margin-right: 8px; }
+    .bar-fill { display: block; height: 100%; }
   </style>
 </head>
 <body>
   <div class="app">
     <nav class="actbar">
       <a href="/" title="Overview">⌂</a>
+      <a href="/dashboard" title="Dashboard">▦</a>
       <a href="/staleness" title="Staleness">⚠</a>
     </nav>
     <aside class="sidebar">
@@ -403,6 +414,142 @@ export async function startStudio(
         <tbody>${rows.join("")}</tbody>
       </table>`;
     return c.html(renderLayout("Overview", html, project));
+  });
+
+  app.get("/dashboard", (c) => {
+    const db = openStore(config, "readonly");
+    const types = project.listTypes();
+    const targetLocales = config.locales.filter((l) => l !== config.defaultLocale);
+
+    // EN doc counts per type + total.
+    const docCountByType = new Map<string, number>();
+    let totalEnDocs = 0;
+    for (const type of types) {
+      const n = type.list().length;
+      docCountByType.set(type.id, n);
+      totalEnDocs += n;
+    }
+
+    // Single pass over the worklist for per-locale and per-type tallies.
+    const worklist = buildWorklist(config);
+    const missingByLocale = new Map<string, number>();
+    const staleByLocale = new Map<string, number>();
+    const missingByType = new Map<string, number>();
+    const staleByType = new Map<string, number>();
+    let missingTotal = 0;
+    let staleTotal = 0;
+    for (const item of worklist) {
+      if (item.reason === "missing") {
+        missingByLocale.set(item.locale, (missingByLocale.get(item.locale) ?? 0) + 1);
+        missingByType.set(item.contentType, (missingByType.get(item.contentType) ?? 0) + 1);
+        missingTotal++;
+      } else if (item.reason === "stale") {
+        staleByLocale.set(item.locale, (staleByLocale.get(item.locale) ?? 0) + 1);
+        staleByType.set(item.contentType, (staleByType.get(item.contentType) ?? 0) + 1);
+        staleTotal++;
+      }
+    }
+
+    const storedTranslations = countTranslations(db);
+    const latestByLocale = new Map<string, string>();
+    for (const row of latestTranslationAtByLocale(db)) {
+      if (row.latest) latestByLocale.set(row.locale, row.latest);
+    }
+    db.close();
+
+    // Overall coverage.
+    const expectedTotal = totalEnDocs * targetLocales.length;
+    const coverageTotal = expectedTotal > 0 ? (expectedTotal - missingTotal) / expectedTotal : 0;
+    const coveragePct = expectedTotal > 0 ? Math.round(coverageTotal * 100) : 0;
+
+    const pct = (fraction: number) => Math.round(fraction * 100);
+    const num = (n: number, warnClass: string) =>
+      n > 0 ? `<span class="${warnClass}">${n}</span>` : `<span class="dim">0</span>`;
+
+    // KPI cards.
+    const coverageColor = expectedTotal > 0 && coveragePct === 100 ? ` style="color:var(--ok)"` : "";
+    const coverageValue = expectedTotal > 0 ? `${coveragePct}%` : `<span class="dim">—</span>`;
+    const staleColor = staleTotal > 0 ? ` style="color:var(--stale)"` : "";
+    const missingColor = missingTotal > 0 ? ` style="color:var(--missing)"` : "";
+    const cards = `<div class="cards">
+      <div class="card"><div class="card-value">${totalEnDocs}</div><div class="card-label">Documents (EN)</div></div>
+      <div class="card"><div class="card-value">${targetLocales.length}</div><div class="card-label">Target locales</div></div>
+      <div class="card"><div class="card-value">${storedTranslations}</div><div class="card-label">Stored translations</div></div>
+      <div class="card"><div class="card-value"${coverageColor}>${coverageValue}</div><div class="card-label">Coverage</div></div>
+      <div class="card"><div class="card-value"${staleColor}>${staleTotal}</div><div class="card-label">Stale</div></div>
+      <div class="card"><div class="card-value"${missingColor}>${missingTotal}</div><div class="card-label">Missing</div></div>
+    </div>`;
+
+    // Locales section.
+    let localeRows: string;
+    if (totalEnDocs === 0 || targetLocales.length === 0) {
+      localeRows = `<tr><td colspan="7" class="dim">No target locales or documents</td></tr>`;
+    } else {
+      localeRows = targetLocales
+        .map((locale) => {
+          const expected = totalEnDocs;
+          const missing = missingByLocale.get(locale) ?? 0;
+          const stale = staleByLocale.get(locale) ?? 0;
+          const translated = expected - missing;
+          const upToDate = translated - stale;
+          const coverage = expected > 0 ? translated / expected : 0;
+          const covPct = pct(coverage);
+          const fillColor = covPct === 100 ? "var(--ok)" : "var(--stale)";
+          const fallbacks = config.localeFallbacks[locale]?.length
+            ? escapeHtml(config.localeFallbacks[locale]!.join(" → "))
+            : `<span class="dim">—</span>`;
+          const latest = latestByLocale.get(locale);
+          const last = latest ? escapeHtml(latest.slice(0, 10)) : `<span class="dim">—</span>`;
+          return `<tr>
+            <td>${escapeHtml(locale)}</td>
+            <td><span class="bar"><span class="bar-fill" style="width:${covPct}%;background:${fillColor}"></span></span>${covPct}%</td>
+            <td>${upToDate}</td>
+            <td>${num(stale, "tag-warn")}</td>
+            <td>${num(missing, "tag-err")}</td>
+            <td>${fallbacks}</td>
+            <td>${last}</td>
+          </tr>`;
+        })
+        .join("");
+    }
+
+    // Types section.
+    let typeRows: string;
+    if (types.length === 0 || targetLocales.length === 0) {
+      typeRows = `<tr><td colspan="5" class="dim">No types or target locales</td></tr>`;
+    } else {
+      typeRows = types
+        .map((type) => {
+          const stale = staleByType.get(type.id) ?? 0;
+          const missing = missingByType.get(type.id) ?? 0;
+          return `<tr>
+            <td><a href="/type/${encodePathSegment(type.id)}">${escapeHtml(type.config.label)}</a></td>
+            <td class="dim">${escapeHtml(type.id)}</td>
+            <td>${docCountByType.get(type.id) ?? 0}</td>
+            <td>${num(stale, "tag-warn")}</td>
+            <td>${num(missing, "tag-err")}</td>
+          </tr>`;
+        })
+        .join("");
+    }
+
+    const html = `<div class="toolbar">Dashboard</div>
+      ${cards}
+      <div class="section">
+        <div class="section-head">Locales</div>
+        <table class="data">
+          <thead><tr><th>Locale</th><th>Coverage</th><th>Up to date</th><th>Stale</th><th>Missing</th><th>Fallbacks</th><th>Last translated</th></tr></thead>
+          <tbody>${localeRows}</tbody>
+        </table>
+      </div>
+      <div class="section">
+        <div class="section-head">Types</div>
+        <table class="data">
+          <thead><tr><th>Type</th><th>ID</th><th>EN docs</th><th>Stale</th><th>Missing</th></tr></thead>
+          <tbody>${typeRows}</tbody>
+        </table>
+      </div>`;
+    return c.html(renderLayout("Dashboard", html, project));
   });
 
   app.get("/type/:id", (c) => {

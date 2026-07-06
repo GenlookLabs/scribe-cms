@@ -183,7 +183,7 @@ Export-static flags:
   --locale <code>...     Locales to export (default: all configured)
 
 Translate flags:
-  --type <id>            Content type (interactive picker in a TTY when omitted)
+  --type <id>            Content type, or comma-separated ids (interactive picker in a TTY when omitted)
   --preset <name>        Locale preset from config (interactive picker in a TTY)
   --locale <code>...     Target locale(s); overrides --preset
   --slug <en-slug>       Single English document
@@ -281,6 +281,7 @@ mode to use.
         locales,
         enSlug: options.slug,
         strategy: selection.strategy ?? "all",
+        force: options.force,
       });
       if (worklist.length === 0) {
         // Still pick up pending batch jobs from an interrupted previous run.

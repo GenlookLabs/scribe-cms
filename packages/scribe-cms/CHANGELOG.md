@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.17 — 2026-07-06
+
+### Fixed
+
+- `scribe translate --force` now includes fresh translations in the worklist (previously only skipped the per-item hash check after an empty worklist).
+- `scribe translate --type` accepts comma-separated content type ids.
+
 ## 0.0.16 — 2026-07-06
 
 ### Fixed

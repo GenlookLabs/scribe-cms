@@ -11,7 +11,7 @@ export interface TranslationWorkItem {
   contentType: string;
   enSlug: string;
   locale: string;
-  reason: "missing" | "stale";
+  reason: "missing" | "stale" | "forced";
   currentEnHash: string;
   storedEnHash?: string;
   /**
@@ -25,11 +25,23 @@ export interface TranslationWorkItem {
 export type TranslationWorklistStrategy = "all" | "missing-only";
 
 export interface WorklistOptions {
+  /** Single id or comma-separated ids (e.g. `vertical,platform`). */
   contentType?: string;
   locales?: string[];
   enSlug?: string;
   /** Which pages to include: all stale/missing (default) or missing only. */
   strategy?: TranslationWorklistStrategy;
+  /** Include fresh translations so prepareTranslation re-runs despite matching hashes. */
+  force?: boolean;
+}
+
+function parseContentTypeFilter(contentType?: string): Set<string> | undefined {
+  if (!contentType) return undefined;
+  const ids = contentType
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  return ids.length > 0 ? new Set(ids) : undefined;
 }
 
 function listEnSlugs(rootDir: string, contentDir: string): string[] {
@@ -48,9 +60,10 @@ export function buildWorklist(config: ScribeConfig, options: WorklistOptions = {
   const locales =
     options.locales ??
     config.locales.filter((locale) => locale !== config.defaultLocale);
+  const contentTypes = parseContentTypeFilter(options.contentType);
 
   for (const type of config.types) {
-    if (options.contentType && type.id !== options.contentType) continue;
+    if (contentTypes && !contentTypes.has(type.id)) continue;
     const enSlugs = options.enSlug ? [options.enSlug] : listEnSlugs(config.rootDir, type.contentDir);
 
     for (const enSlug of enSlugs) {
@@ -72,12 +85,13 @@ export function buildWorklist(config: ScribeConfig, options: WorklistOptions = {
           });
           continue;
         }
-        if (existing.en_hash !== currentEnHash) {
+        const stale = existing.en_hash !== currentEnHash;
+        if (stale || options.force) {
           items.push({
             contentType: type.id,
             enSlug,
             locale,
-            reason: "stale",
+            reason: stale ? "stale" : "forced",
             currentEnHash,
             storedEnHash: existing.en_hash,
           });
