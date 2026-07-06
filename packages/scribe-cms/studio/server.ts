@@ -335,7 +335,7 @@ function renderLayout(
     .card { flex: 1 1 120px; background: var(--bg); padding: 12px; min-width: 120px; }
     .card-value { font-size: 22px; font-weight: 300; line-height: 1.2; }
     .card-label { font-size: var(--fs-sm); color: var(--dim); margin-top: 2px; }
-    .bar { display: inline-block; width: 120px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; vertical-align: middle; margin-right: 8px; }
+    .bar { display: inline-flex; width: 120px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; vertical-align: middle; margin-right: 8px; }
     .bar-fill { display: block; height: 100%; }
   </style>
 </head>
@@ -459,7 +459,8 @@ export async function startStudio(
 
     // Overall coverage.
     const expectedTotal = totalEnDocs * targetLocales.length;
-    const coverageTotal = expectedTotal > 0 ? (expectedTotal - missingTotal) / expectedTotal : 0;
+    const coverageTotal =
+      expectedTotal > 0 ? (expectedTotal - missingTotal - staleTotal) / expectedTotal : 0;
     const coveragePct = expectedTotal > 0 ? Math.round(coverageTotal * 100) : 0;
 
     const pct = (fraction: number) => Math.round(fraction * 100);
@@ -492,9 +493,8 @@ export async function startStudio(
           const stale = staleByLocale.get(locale) ?? 0;
           const translated = expected - missing;
           const upToDate = translated - stale;
-          const coverage = expected > 0 ? translated / expected : 0;
-          const covPct = pct(coverage);
-          const fillColor = covPct === 100 ? "var(--ok)" : "var(--stale)";
+          const upToDatePct = pct(expected > 0 ? upToDate / expected : 0);
+          const stalePct = pct(expected > 0 ? stale / expected : 0);
           const fallbacks = config.localeFallbacks[locale]?.length
             ? escapeHtml(config.localeFallbacks[locale]!.join(" → "))
             : `<span class="dim">—</span>`;
@@ -502,7 +502,7 @@ export async function startStudio(
           const last = latest ? escapeHtml(latest.slice(0, 10)) : `<span class="dim">—</span>`;
           return `<tr>
             <td>${escapeHtml(locale)}</td>
-            <td><span class="bar"><span class="bar-fill" style="width:${covPct}%;background:${fillColor}"></span></span>${covPct}%</td>
+            <td><span class="bar"><span class="bar-fill" style="width:${upToDatePct}%;background:var(--ok)"></span><span class="bar-fill" style="width:${stalePct}%;background:var(--stale)"></span></span>${upToDatePct}%</td>
             <td>${upToDate}</td>
             <td>${num(stale, "tag-warn")}</td>
             <td>${num(missing, "tag-err")}</td>

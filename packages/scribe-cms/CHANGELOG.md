@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.18 — 2026-07-06
+
+### Fixed
+
+- Blog translations no longer fail when the model hallucinates `itemList` on posts that have none in EN: response schema is scoped to the EN payload and orphan nested output is pruned before validation.
+- Structural merge no longer overwrites EN fields with `undefined` from the model output.
+
 ## 0.0.17 — 2026-07-06
 
 ### Fixed

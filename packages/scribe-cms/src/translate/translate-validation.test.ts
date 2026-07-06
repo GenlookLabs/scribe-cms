@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { z } from "zod";
 import { field } from "../core/field.js";
-import { buildGeminiResponseSchema, buildTranslatableSubschema } from "./response-schema.js";
+import { buildGeminiResponseSchema, buildTranslatableSubschema, buildTranslatableSubschemaForPayload } from "./response-schema.js";
 import {
   sanitizeTranslatedFrontmatter,
   validateTranslatedFrontmatter,
@@ -31,6 +31,23 @@ const blogSchema = z.object({
   ),
 });
 
+const blogItemListUrlSchema = z.object({
+  title: field.translatable(z.string().min(1)),
+  description: field.translatable(z.string().min(1)),
+  itemList: field.structural(
+    z
+      .array(
+        z.object({
+          name: field.translatable(z.string().min(1)),
+          url: field.structural(z.url()),
+          description: field.translatable(z.string().optional()),
+        }),
+      )
+      .min(1)
+      .optional(),
+  ),
+});
+
 describe("buildTranslatableSubschema", () => {
   it("includes only translatable top-level fields for pricing", () => {
     const sub = buildTranslatableSubschema(pricingSchema);
@@ -52,6 +69,17 @@ describe("buildTranslatableSubschema", () => {
     assert.equal(shape.itemList?._def.type, "array");
     assert.equal("author" in shape, false);
   });
+
+  it("omits nested structural arrays from payload-scoped subschema when absent in EN", () => {
+    const sub = buildTranslatableSubschemaForPayload(blogItemListUrlSchema, {
+      title: "Hello",
+      description: "Long enough description for the post",
+    });
+    assert.ok(sub);
+    const shape = sub.shape;
+    assert.ok("title" in shape);
+    assert.equal("itemList" in shape, false);
+  });
 });
 
 describe("buildGeminiResponseSchema", () => {
@@ -71,7 +99,10 @@ describe("buildGeminiResponseSchema", () => {
   });
 
   it("adds slug for localized strategy", () => {
-    const schema = buildGeminiResponseSchema(blogSchema, "localized");
+    const schema = buildGeminiResponseSchema(blogSchema, "localized", {
+      title: "Hello",
+      description: "Desc",
+    });
     assert.ok(schema);
     const props = schema.properties as Record<string, Record<string, unknown>>;
     assert.ok(props.slug);
@@ -149,6 +180,36 @@ describe("validateTranslatedFrontmatter", () => {
     assert.equal(result.ok, false);
     if (!result.ok) {
       assert.match(result.error, /schemaDescription/i);
+    }
+  });
+
+  it("drops hallucinated itemList when the EN source has none", () => {
+    const enDoc: ScribeDocument = {
+      slug: "dropshipping-tools",
+      enSlug: "dropshipping-tools",
+      locale: "en",
+      noindex: false,
+      frontmatter: {
+        title: "Best AI tools",
+        description: "A long enough English description for validation.",
+      },
+      content: "",
+    };
+    const result = validateTranslatedFrontmatter(
+      enDoc,
+      {
+        title: "Meilleurs outils IA",
+        description: "Une description traduite suffisamment longue pour valider.",
+        itemList: [
+          { name: "Shopify Magic", description: "Hallucinated from the MDX body" },
+          { name: "DSers", description: "Also hallucinated" },
+        ],
+      },
+      blogItemListUrlSchema,
+    );
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal("itemList" in result.frontmatter, false);
     }
   });
 });

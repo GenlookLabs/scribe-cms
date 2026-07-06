@@ -252,7 +252,11 @@ export function prepareTranslation(
     previousError: item.previousError,
   });
 
-  const responseSchema = buildGeminiResponseSchema(type.schema, type.slugStrategy);
+  const responseSchema = buildGeminiResponseSchema(
+    type.schema,
+    type.slugStrategy,
+    payload.frontmatter,
+  );
 
   return {
     status: "ready",

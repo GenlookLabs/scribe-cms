@@ -57,6 +57,30 @@ export function buildTranslatableSubschema(schema: z.ZodTypeAny): z.ZodObject | 
 }
 
 /**
+ * Like `buildTranslatableSubschema`, but only includes keys present in the EN
+ * translatable payload. Prevents the model from hallucinating nested structural
+ * arrays (e.g. blog `itemList`) when the source document has none.
+ */
+export function buildTranslatableSubschemaForPayload(
+  schema: z.ZodTypeAny,
+  translatableFrontmatter: Record<string, unknown>,
+): z.ZodObject | null {
+  const full = buildTranslatableSubschema(schema);
+  if (!full) return null;
+
+  const filtered: Record<string, z.ZodTypeAny> = {};
+  for (const [key, childSchema] of Object.entries(full.shape)) {
+    if (!(key in translatableFrontmatter)) continue;
+    const value = translatableFrontmatter[key];
+    if (value === undefined || value === null) continue;
+    filtered[key] = childSchema as z.ZodTypeAny;
+  }
+
+  if (Object.keys(filtered).length === 0) return null;
+  return z.object(filtered);
+}
+
+/**
  * JSON Schema for Gemini structured output: `{ frontmatter, body, slug? }`.
  * Types without translatable frontmatter get a body-only schema (Gemini
  * rejects OBJECT schemas with empty `properties`); parsing then defaults the
@@ -67,9 +91,13 @@ export function buildTranslatableSubschema(schema: z.ZodTypeAny): z.ZodObject | 
 export function buildGeminiResponseSchema(
   schema: z.ZodTypeAny,
   slugStrategy: SlugStrategy,
+  translatableFrontmatter?: Record<string, unknown>,
 ): Record<string, unknown> | null {
   try {
-    const translatable = buildTranslatableSubschema(schema);
+    const translatable =
+      translatableFrontmatter !== undefined
+        ? buildTranslatableSubschemaForPayload(schema, translatableFrontmatter)
+        : buildTranslatableSubschema(schema);
 
     const responseShape: Record<string, z.ZodTypeAny> = {
       ...(translatable ? { frontmatter: translatable } : {}),

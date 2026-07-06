@@ -140,6 +140,30 @@ export function pickTranslatable(data: Record<string, unknown>, schema: z.ZodTyp
   return extractByPaths(data, translatablePaths);
 }
 
+/**
+ * Drop nested translatable output when the EN document has no matching structural
+ * parent (e.g. model-hallucinated blog `itemList` on posts with no ItemList SEO).
+ */
+export function pruneOrphanNestedTranslations(
+  localeData: Record<string, unknown>,
+  enData: Record<string, unknown>,
+  schema: z.ZodTypeAny,
+): Record<string, unknown> {
+  const out = { ...localeData };
+  const structuralParentsWithNested = new Set<string>();
+  for (const meta of introspectSchema(schema)) {
+    if (meta.kind !== "translatable" || meta.path.length < 3 || meta.path[1] !== "*") continue;
+    structuralParentsWithNested.add(meta.path[0]!);
+  }
+  for (const parent of structuralParentsWithNested) {
+    const enParent = enData[parent];
+    if (enParent === undefined || enParent === null) {
+      delete out[parent];
+    }
+  }
+  return out;
+}
+
 /** Extract frontmatter fields marked as structural (EN-only). */
 export function pickStructural(data: Record<string, unknown>, schema: z.ZodTypeAny): Record<string, unknown> {
   const structuralPaths = introspectSchema(schema)
@@ -173,7 +197,7 @@ function deepMerge(base: Record<string, unknown>, overlay: Record<string, unknow
       out[key] = deepMerge(out[key] as Record<string, unknown>, value as Record<string, unknown>);
     } else if (Array.isArray(value) && Array.isArray(out[key])) {
       out[key] = mergeArrayOverlay(out[key] as unknown[], value as unknown[]);
-    } else {
+    } else if (value !== undefined) {
       out[key] = value;
     }
   }
