@@ -90,10 +90,17 @@ function detailForResult(result: TranslatePageResult): string {
   return parts.length > 0 ? dim(parts.join(" · ")) : "";
 }
 
-function formatSummaryLine(totals: TranslateWorklistTotals, dryRun: boolean): string {
+function formatSummaryLine(
+  totals: TranslateWorklistTotals,
+  dryRun: boolean,
+  retriedTranslated = 0,
+): string {
   const action = dryRun ? "Would translate" : "Translated";
+  const base = totals.translated - retriedTranslated;
   const parts = [
-    `${action} ${totals.translated}`,
+    retriedTranslated > 0
+      ? `${action} ${base} +${retriedTranslated} on retry`
+      : `${action} ${totals.translated}`,
     `skipped ${totals.skipped}`,
   ];
   if (totals.failed > 0) parts.push(red(`failed ${totals.failed}`));
@@ -153,8 +160,18 @@ export function createTranslateProgressReporter(options: {
           }
           return;
         }
+        if (event.type === "retry-start") {
+          for (const result of event.failed) {
+            console.log(`${labelForResult(result)}: ${result.error ?? "failed"}`);
+          }
+          console.log(`Retrying ${event.failed.length} failed items with validation context...`);
+          return;
+        }
         if (event.type === "done") {
-          console.log(formatSummaryLine(event.totals, dryRun));
+          console.log(formatSummaryLine(event.totals, dryRun, event.retriedTranslated));
+          for (const result of event.results.filter((entry) => entry.failed)) {
+            console.error(`${labelForResult(result)}: ${result.error ?? "failed"}`);
+          }
         }
       },
       finish() {},
@@ -358,12 +375,33 @@ export function createTranslateProgressReporter(options: {
           render();
           break;
         }
+        case "retry-start": {
+          // Retry items produce a second round of item-done events; extend the
+          // total so the progress bar does not overshoot 100%.
+          total += event.failed.length;
+          // Print the failure recap as persistent lines above the live area,
+          // then the "Retrying…" banner. done resets below to track retry items.
+          printPersistent([
+            ...event.failed.map((result) =>
+              red(`${labelForResult(result)}: ${result.error ?? "failed"}`),
+            ),
+            cyan(`Retrying ${event.failed.length} failed items with validation context...`),
+          ]);
+          render();
+          break;
+        }
         case "done":
           showCursor();
           if (renderedLines > 0) {
             process.stdout.write(`\x1b[${renderedLines}A`);
           }
-          process.stdout.write("\x1b[2K" + green("Done") + " · " + formatSummaryLine(event.totals, dryRun) + "\n");
+          process.stdout.write(
+            "\x1b[2K" +
+              green("Done") +
+              " · " +
+              formatSummaryLine(event.totals, dryRun, event.retriedTranslated) +
+              "\n",
+          );
           renderedLines = 0;
           for (const result of event.results.filter((entry) => entry.failed)) {
             process.stdout.write("\x1b[2K" + red(`${labelForResult(result)}: ${result.error ?? "failed"}`) + "\n");

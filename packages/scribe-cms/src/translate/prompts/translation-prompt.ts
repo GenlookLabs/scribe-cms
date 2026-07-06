@@ -60,6 +60,19 @@ function buildOutputFormatLine(hasFrontmatter: boolean, slugStrategy: SlugStrate
  * locale-specific instructions. This lets Gemini reuse the cached prefix when the
  * same page is translated into multiple locales.
  */
+/**
+ * Compose the retry-context section appended (locale-specific suffix only, never
+ * the cached prefix) when a previous attempt was rejected by validation. The
+ * validation errors are included verbatim so the model can fix the exact issues.
+ */
+function buildRetryContextSection(previousError: string): string[] {
+  return [
+    "",
+    "## Previous attempt",
+    `A previous attempt at this translation was rejected with the following validation errors: ${previousError}. Produce a corrected translation that fixes these issues while re-checking every schema constraint (required fields, array minimums, maximum lengths).`,
+  ];
+}
+
 export function buildPageTranslationPrompt(input: {
   resolved: ResolvedTranslateConfig;
   targetLocale: string;
@@ -67,6 +80,8 @@ export function buildPageTranslationPrompt(input: {
   translatableFrontmatter: Record<string, unknown>;
   enBody: string;
   slugStrategy: SlugStrategy;
+  /** Verbatim validation errors from a prior rejected attempt (retry round). */
+  previousError?: string;
 }): string {
   const localeName = LOCALE_NAMES[input.targetLocale] ?? input.targetLocale;
   const localizationPrompt =
@@ -107,6 +122,9 @@ export function buildPageTranslationPrompt(input: {
       Object.keys(input.translatableFrontmatter).length > 0,
       input.slugStrategy,
     ),
+    // Retry context is locale-specific suffix material: it MUST stay after the
+    // EN body so the cacheable prefix is byte-identical with and without it.
+    ...(input.previousError ? buildRetryContextSection(input.previousError) : []),
   ];
 
   return [...prefix, ...suffix].join("\n");

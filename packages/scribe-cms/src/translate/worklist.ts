@@ -14,6 +14,12 @@ export interface TranslationWorkItem {
   reason: "missing" | "stale";
   currentEnHash: string;
   storedEnHash?: string;
+  /**
+   * Verbatim validation error from a prior attempt in the same run. Set only for
+   * the one-shot retry round; appended to the prompt's locale-specific suffix so
+   * the model can correct the exact issues.
+   */
+  previousError?: string;
 }
 
 export type TranslationWorklistStrategy = "all" | "missing-only";

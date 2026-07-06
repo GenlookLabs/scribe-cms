@@ -100,8 +100,12 @@ A translation is only persisted if it survives two checks:
    JSX attribute quoting the model sometimes gets wrong).
 2. The returned frontmatter must re-validate against your full Zod schema.
 
-A failing item fails the command with a non-zero exit code — bad model output
-never reaches the store, so it can never reach production.
+Items that fail validation are automatically retried once at the end of the
+run, with the validation errors fed back to the model so it can correct them
+(batch runs retry as one extra batch job, still at the batch rate). Anything
+that fails again is listed in the final recap with its new error, and the
+command exits non-zero: bad model output never reaches the store, so it can
+never reach production.
 
 ## Steering the translator
 

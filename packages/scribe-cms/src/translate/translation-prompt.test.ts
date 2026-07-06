@@ -67,6 +67,58 @@ describe("buildPageTranslationPrompt prefix caching invariant", () => {
     assert.match(prefix, /"title": "Hello"/);
   });
 
+  it("appends retry context only in the locale-specific suffix, verbatim", () => {
+    const previousError =
+      "Translation validation failed: itemList.0.url: Invalid input: expected string, received undefined";
+    const withRetry = buildPageTranslationPrompt({
+      resolved,
+      targetLocale: "fr",
+      contextLabel: "Hello page",
+      translatableFrontmatter: { title: "Hello", description: "A greeting" },
+      enBody,
+      slugStrategy: "localized",
+      previousError,
+    });
+
+    const bodyMarker = `## EN body (MDX)\n${enBody}`;
+    const splitAt = withRetry.indexOf(bodyMarker) + bodyMarker.length;
+    const prefix = withRetry.slice(0, splitAt);
+    const suffix = withRetry.slice(splitAt);
+
+    // The retry context must never leak into the cacheable prefix.
+    assert.doesNotMatch(prefix, /Previous attempt/);
+    assert.doesNotMatch(prefix, /previous attempt at this translation was rejected/);
+    // The verbatim error must be present in the suffix.
+    assert.match(suffix, /## Previous attempt/);
+    assert.ok(
+      suffix.includes(previousError),
+      "suffix contains the verbatim validation error",
+    );
+    assert.match(suffix, /Produce a corrected translation that fixes these issues/);
+  });
+
+  it("keeps the shared EN prefix byte-identical with and without retry context", () => {
+    const bodyMarker = `## EN body (MDX)\n${enBody}`;
+    const plain = promptFor("fr");
+    const withRetry = buildPageTranslationPrompt({
+      resolved,
+      targetLocale: "fr",
+      contextLabel: "Hello page",
+      translatableFrontmatter: { title: "Hello", description: "A greeting" },
+      enBody,
+      slugStrategy: "localized",
+      previousError: "Translation validation failed: description: Too big",
+    });
+
+    const plainPrefix = plain.slice(0, plain.indexOf(bodyMarker) + bodyMarker.length);
+    const retryPrefix = withRetry.slice(0, withRetry.indexOf(bodyMarker) + bodyMarker.length);
+    assert.equal(
+      retryPrefix,
+      plainPrefix,
+      "retry context must not change the cacheable prefix",
+    );
+  });
+
   it("asks for body-only JSON when there is no translatable frontmatter", () => {
     // Mirrors buildGeminiResponseSchema: changelog-like types get a body-only
     // response schema, so the prompt must not ask for a frontmatter key.

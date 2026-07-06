@@ -56,6 +56,131 @@ function labelForItem(item: TranslationWorkItem): string {
 }
 
 /**
+ * Build the retry worklist from the failed results of a completed pass. Each
+ * retry item carries the original item's EN hash plus the verbatim error from
+ * the failed attempt, so the retry prompt can ask the model to fix exactly those
+ * validation issues. Items whose failure has no original work item (e.g. resumed
+ * batch items from a prior run) are rebuilt from the result alone; `force` is set
+ * so a freshly-upserted-then-rejected slot is not treated as up to date.
+ */
+export function buildRetryWorklist(
+  failed: TranslatePageResult[],
+  originalByKey: Map<string, TranslationWorkItem>,
+): TranslationWorkItem[] {
+  return failed.map((result) => {
+    const key = translationItemKey(result);
+    const original = originalByKey.get(key);
+    return {
+      contentType: result.contentType,
+      enSlug: result.enSlug,
+      locale: result.locale,
+      reason: original?.reason ?? "missing",
+      currentEnHash: original?.currentEnHash ?? "",
+      storedEnHash: original?.storedEnHash,
+      previousError: result.error ?? "Translation failed",
+    };
+  });
+}
+
+/**
+ * Re-translate a set of already-failed items exactly once, appending each item's
+ * verbatim validation error to the prompt suffix. Batch runs submit the retry
+ * items as one additional batch job (batch-priced); direct runs retry with a
+ * direct pool honoring `concurrency`. Pending jobs from prior runs are NOT
+ * touched here — this only covers the items that failed in the just-finished
+ * pass. Returns one result per retry item (translated or newly failed); these
+ * items are never retried a second time within the run.
+ */
+export async function runRetryRound(
+  config: ScribeConfig,
+  retryItems: TranslationWorkItem[],
+  options: {
+    model?: string;
+    force?: boolean;
+    concurrency: number;
+    mode: TranslateMode;
+    onResult: (result: TranslatePageResult) => void;
+    onProgress?: (event: TranslateProgressEvent) => void;
+    /** Injectable single-item translator (tests); defaults to translatePage. */
+    translateOne?: (
+      item: TranslationWorkItem,
+    ) => Promise<TranslatePageResult>;
+  },
+): Promise<void> {
+  const startedAt = Date.now();
+  // force: the failed pass may have left nothing stored, but if a stale row
+  // exists we must still re-translate rather than skip as fresh.
+  const translateOne =
+    options.translateOne ??
+    ((item: TranslationWorkItem) =>
+      translatePage(config, item, { model: options.model, force: true }));
+
+  if (options.mode === "direct") {
+    const active = new Set<string>();
+    await runPool(retryItems, options.concurrency, async (item) => {
+      const label = labelForItem(item);
+      active.add(label);
+      options.onProgress?.({ type: "item-start", item, active: [...active] });
+      const result = await translateOne(item);
+      active.delete(label);
+      options.onResult(result);
+    });
+    return;
+  }
+
+  // Batch retry: prepare, plan one job group, submit, poll+ingest — the same
+  // machinery as the main batch pass but scoped to just the retry items and
+  // without adopting any pending jobs.
+  const entries: Array<{ apiModel: string; prompt: string; prepared: PreparedTranslation }> = [];
+  for (const item of retryItems) {
+    const itemStartedAt = Date.now();
+    try {
+      const outcome = prepareTranslation(config, item, { model: options.model, force: true }, itemStartedAt);
+      if (outcome.status === "done") {
+        options.onResult(outcome.result);
+      } else {
+        entries.push({
+          apiModel: resolveGeminiModelId(displayModelFor(outcome.prepared)),
+          prompt: outcome.prepared.prompt,
+          prepared: outcome.prepared,
+        });
+      }
+    } catch (error) {
+      options.onResult(failedResultForItem(item, error, itemStartedAt));
+    }
+  }
+
+  const plans = planBatchJobs(entries);
+  const submitted = await Promise.all(
+    plans.map(async (plan, planIndex) => {
+      try {
+        return await submitBatchJobPlan(config, {
+          plan,
+          displayModel: normalizeGeminiDisplayName(plan.apiModel),
+          jobIndex: planIndex,
+          jobCount: plans.length,
+          onProgress: options.onProgress,
+        });
+      } catch (error) {
+        for (const entry of plan.entries) {
+          options.onResult(failedResultForItem(entry.prepared.item, error, startedAt));
+        }
+        return undefined;
+      }
+    }),
+  );
+
+  const jobsToPoll = submitted.filter((row): row is BatchJobRow => row !== undefined);
+  if (jobsToPoll.length > 0) {
+    await pollAndIngestBatchJobs(config, jobsToPoll, {
+      jobCount: jobsToPoll.length,
+      onProgress: options.onProgress,
+      onResult: options.onResult,
+    });
+  }
+}
+
+/**
  * Translate one locale page via a direct (interactive) Gemini call and upsert
  * into SQLite. Used by the studio server and other single-page callers; the
  * worklist path defaults to the Batch API instead.
@@ -295,9 +420,50 @@ export async function translateWorklist(
     }
   }
 
-  const results = collector.assemble();
+  const mainResults = collector.assemble();
+
+  // One-shot retry round: re-translate every validation failure once, feeding
+  // the verbatim error back into the prompt suffix. Items still failing after
+  // this are not retried again in the same run.
+  const failed = mainResults.filter((result) => result.failed);
+  if (failed.length === 0) {
+    const totals = summarizeResults(mainResults, Date.now() - startedAt);
+    options.onProgress?.({ type: "done", results: mainResults, totals });
+    return mainResults;
+  }
+
+  options.onProgress?.({ type: "retry-start", failed });
+
+  const originalByKey = new Map<string, TranslationWorkItem>(
+    items.map((item) => [translationItemKey(item), item]),
+  );
+  const retryItems = buildRetryWorklist(failed, originalByKey);
+  const retryByKey = new Map<string, TranslatePageResult>();
+  await runRetryRound(config, retryItems, {
+    model: options.model,
+    force: options.force,
+    concurrency,
+    mode,
+    onProgress: options.onProgress,
+    onResult: (result) => {
+      retryByKey.set(translationItemKey(result), result);
+      options.onProgress?.({ type: "item-done", result });
+    },
+  });
+
+  // Merge: replace each failed slot with its retry outcome (translated or newly
+  // failed). Results with no retry outcome (should not happen) keep the original.
+  const results = mainResults.map((result) => {
+    if (!result.failed) return result;
+    return retryByKey.get(translationItemKey(result)) ?? result;
+  });
+  const retriedTranslated = failed.filter((original) => {
+    const retried = retryByKey.get(translationItemKey(original));
+    return retried !== undefined && !retried.failed && !retried.skipped;
+  }).length;
+
   const totals = summarizeResults(results, Date.now() - startedAt);
-  options.onProgress?.({ type: "done", results, totals });
+  options.onProgress?.({ type: "done", results, totals, retriedTranslated });
   return results;
 }
 
