@@ -239,6 +239,12 @@ const nextConfig = {
   outputFileTracingIncludes: {
     "/**": ["./content/**/*", "./.scribe/**/*"],
   },
+  // Also required on Vercel: Scribe's runtime file reads make the tracer
+  // sweep Next's webpack build cache into every serverless function,
+  // blowing past the 250 MB limit. The cache is never needed at runtime.
+  outputFileTracingExcludes: {
+    "/**": ["./.next/cache/**"],
+  },
 };
 ```
 

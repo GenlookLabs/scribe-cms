@@ -14,6 +14,11 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/**": ["./content/**/*", "./.scribe/**/*"],
   },
+  // Next's tracer sweeps the webpack build cache into every function's trace
+  // (250MB+ on Vercel); the cache is never needed at runtime.
+  outputFileTracingExcludes: {
+    "/**": ["./.next/cache/**"],
+  },
   async redirects() {
     // Old routes folded into /docs.
     return [
