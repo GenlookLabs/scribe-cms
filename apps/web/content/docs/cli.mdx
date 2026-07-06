@@ -26,22 +26,24 @@ Validates the whole project — schemas, built-in fields, `crossValidate` hooks,
 
 ## `scribe translate`
 
-Translates missing and stale pages with Gemini (needs `GEMINI_API_KEY`). Run without flags in a terminal, it interactively asks for content type, locale preset, and strategy. In scripts, pass flags:
+Translates missing and stale pages with Gemini (needs `GEMINI_API_KEY`). Run without flags in a terminal, it interactively asks for content type, locale preset, strategy, and translation mode. In scripts, pass flags:
 
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--type <id>` | all types | One content type. |
 | `--locale <code>...` | all non-default locales | Target locales (space-separated). Overrides `--preset`. |
-| `--preset <name>` | — | A `localePresets` group from the config. |
-| `--slug <en-slug>` | — | One English document. |
+| `--preset <name>` | - | A `localePresets` group from the config. |
+| `--slug <en-slug>` | - | One English document. |
 | `--strategy <all\|missing-only>` | `all` | `all` = stale + missing; `missing-only` skips stale re-translation. |
-| `--concurrency <n>` | `3` | Parallel translation requests. |
+| `--batch` / `--direct` | `batch` | Translation mode. Batch sends everything through the Gemini Batch API at 50% token cost; direct makes per-page API calls for immediate results. |
+| `--resume` | - | Check pending batch jobs, ingest finished ones, submit nothing new. |
+| `--concurrency <n>` | `3` | Parallel translation requests (direct mode only). |
 | `--model <id>` | `gemini-3.1-pro` | Gemini model override. |
-| `--dry-run` | — | Print the worklist without calling the API or writing. |
-| `--force` | — | Re-translate even when the English hash matches. |
-| `--no-progress` | — | Plain line-by-line logs instead of the live progress UI. |
+| `--dry-run` | - | Print the worklist without calling the API or writing. |
+| `--force` | - | Re-translate even when the English hash matches. |
+| `--no-progress` | - | Plain line-by-line logs instead of the live progress UI. |
 
-Interactive runs show a live progress bar with per-item status, running input/output token counts, and an estimated cost in USD. The command exits non-zero if any item failed. Details in [translation](/docs/translation).
+Interactive runs show a live progress bar with batch job status, per-item results, running input/output token counts, and an estimated cost in USD (thinking tokens included). Batch jobs are persisted in the store before polling starts, so interrupting with Ctrl+C is safe: the next run (or `--resume`) picks them back up without double-submitting anything. The command exits non-zero if any item failed. Details in [translation](/docs/translation).
 
 ## `scribe history <type> <en-slug> [locale]`
 

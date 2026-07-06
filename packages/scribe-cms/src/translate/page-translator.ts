@@ -327,6 +327,7 @@ function emitResumedJobs(
       jobIndex,
       jobCount,
       resumed: true,
+      createdAt: job.created_at,
     });
   });
 }

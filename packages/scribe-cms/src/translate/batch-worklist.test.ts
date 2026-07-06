@@ -168,6 +168,7 @@ describe("ingestBatchJob (persistence round-trip)", () => {
       (result) => results.push(result),
     );
 
+    assert.ok(returned, "first ingest must win the completion claim");
     assert.equal(returned.length, 2);
     assert.deepEqual(returned, results);
 
@@ -194,6 +195,36 @@ describe("ingestBatchJob (persistence round-trip)", () => {
     assert.equal(pendingJobs.length, 0, "job must be marked completed");
   });
 
+  it("ingests a job reported with the live BATCH_STATE_ prefix", () => {
+    // The live REST API returns BATCH_STATE_SUCCEEDED, not JOB_STATE_SUCCEEDED;
+    // ingestion must normalize the family prefix and still finalize.
+    const { config } = makeFixture();
+    const { jobRow, jobId } = persistJob(config);
+
+    const returned = ingestBatchJob(config, jobRow, {
+      state: "BATCH_STATE_SUCCEEDED",
+      dest: {
+        inlinedResponses: [
+          successResponse({ frontmatter: { title: "Bonjour" }, body: "Corps.", slug: "bonjour" }),
+          successResponse({ frontmatter: { title: "Privet" }, body: "Telo.", slug: "privet" }),
+        ],
+      },
+    });
+
+    assert.ok(returned);
+    assert.equal(returned.length, 2);
+    assert.ok(returned.every((result) => !result.failed));
+    const fr = returned.find((r) => r.locale === "fr")!;
+    assert.equal(fr.usage?.inputTokens, 100);
+    assert.equal(fr.usage?.outputTokens, 110);
+
+    const db = openStore(config, "readonly");
+    const items = listBatchItems(db, jobId);
+    assert.ok(items.every((item) => item.status === "done"));
+    assert.equal(listPendingBatchJobs(db).length, 0);
+    db.close();
+  });
+
   it("uses the stored EN snapshot when the EN file is missing on disk", () => {
     // makeFixture never writes EN files, so this whole suite exercises the
     // snapshot fallback; this test asserts it explicitly for a fresh job.
@@ -207,9 +238,40 @@ describe("ingestBatchJob (persistence round-trip)", () => {
           { error: { message: "skip" } },
         ],
       },
-    });
+    })!;
     assert.equal(fr!.failed, undefined);
     assert.equal(fr!.locale, "fr");
+  });
+
+  it("returns null when another process already claimed the job", () => {
+    // Concurrent scribe runs adopt each other's pending jobs, so two pollers
+    // can reach the same terminal job. Only the first claim ingests; the
+    // loser must get null (not an empty result set that renders as
+    // "0 requests · 0 translated").
+    const { config } = makeFixture();
+    const { jobRow, jobId } = persistJob(config);
+    const payload = {
+      state: "JOB_STATE_SUCCEEDED",
+      dest: {
+        inlinedResponses: [
+          successResponse({ frontmatter: { title: "Bonjour" }, body: "Corps.", slug: "bonjour" }),
+          successResponse({ frontmatter: { title: "Privet" }, body: "Telo.", slug: "privet" }),
+        ],
+      },
+    };
+
+    const winner = ingestBatchJob(config, jobRow, payload);
+    assert.ok(winner);
+    assert.equal(winner.length, 2);
+
+    // The second poller still holds the stale (uncompleted) row in memory.
+    const loser = ingestBatchJob(config, { ...jobRow, completed_at: null }, payload);
+    assert.equal(loser, null);
+
+    const db = openStore(config, "readonly");
+    const items = listBatchItems(db, jobId);
+    db.close();
+    assert.ok(items.every((item) => item.status === "done"));
   });
 
   it("marks every pending item failed when the job itself failed", () => {
@@ -221,6 +283,7 @@ describe("ingestBatchJob (persistence round-trip)", () => {
       error: { message: "quota exceeded" },
     });
 
+    assert.ok(returned);
     assert.equal(returned.length, 2);
     assert.ok(returned.every((result) => result.failed));
     assert.match(returned[0]!.error ?? "", /quota exceeded/);

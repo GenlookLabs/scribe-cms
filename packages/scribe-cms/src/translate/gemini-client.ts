@@ -72,17 +72,34 @@ export function buildGeminiRequestConfig(input: {
   };
 }
 
-/** Extract token usage from a Gemini response; thoughts are folded into output. */
+interface WireUsageMetadata {
+  promptTokenCount?: number;
+  candidatesTokenCount?: number;
+  thoughtsTokenCount?: number;
+  totalTokenCount?: number;
+  prompt_token_count?: number;
+  candidates_token_count?: number;
+  thoughts_token_count?: number;
+  total_token_count?: number;
+}
+
+/**
+ * Extract token usage from a Gemini response; thoughts are folded into output.
+ * Batch inlined responses arrive as raw JSON rather than SDK class instances,
+ * so tolerate both camelCase and snake_case field names.
+ */
 export function usageFromResponse(response: GenerateContentResponse): GeminiTokenUsage {
-  const usageMetadata = response.usageMetadata;
-  const thoughtsTokens = usageMetadata?.thoughtsTokenCount ?? 0;
+  const meta = (response.usageMetadata ??
+    (response as unknown as { usage_metadata?: WireUsageMetadata }).usage_metadata ??
+    {}) as WireUsageMetadata;
+  const thoughtsTokens = meta.thoughtsTokenCount ?? meta.thoughts_token_count ?? 0;
   return {
-    inputTokens: usageMetadata?.promptTokenCount ?? 0,
+    inputTokens: meta.promptTokenCount ?? meta.prompt_token_count ?? 0,
     // candidatesTokenCount does not include thoughts, but thoughts are billed as
     // output tokens, so fold them in here for accurate cost accounting.
-    outputTokens: (usageMetadata?.candidatesTokenCount ?? 0) + thoughtsTokens,
+    outputTokens: (meta.candidatesTokenCount ?? meta.candidates_token_count ?? 0) + thoughtsTokens,
     thoughtsTokens,
-    totalTokens: usageMetadata?.totalTokenCount ?? 0,
+    totalTokens: meta.totalTokenCount ?? meta.total_token_count ?? 0,
   };
 }
 

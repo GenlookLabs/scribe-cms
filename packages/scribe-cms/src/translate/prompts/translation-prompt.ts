@@ -13,6 +13,7 @@ export const LOCALE_NAMES: Record<string, string> = {
   "zh-CN": "Simplified Chinese",
   "zh-TW": "Traditional Chinese",
   pt: "Portuguese",
+  "pt-BR": "Brazilian Portuguese",
   ja: "Japanese",
   ru: "Russian",
   it: "Italian",

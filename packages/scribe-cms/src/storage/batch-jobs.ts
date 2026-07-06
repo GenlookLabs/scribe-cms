@@ -99,17 +99,25 @@ export function listPendingBatchItems(db: Database.Database): BatchItemRow[] {
     .all() as BatchItemRow[];
 }
 
-export function updateBatchJobState(
+/**
+ * Atomically claim a terminal job for ingestion by stamping completed_at.
+ * Returns false when another process already completed it — concurrent scribe
+ * runs adopt each other's pending jobs, so two pollers can reach the same
+ * terminal job; only the one whose claim succeeds may ingest its results.
+ */
+export function claimBatchJobCompletion(
   db: Database.Database,
   jobId: number,
   state: string,
-  completedAt?: string,
-): void {
-  db.prepare(`UPDATE translation_batch_jobs SET state = ?, completed_at = ? WHERE id = ?`).run(
-    state,
-    completedAt ?? null,
-    jobId,
-  );
+  completedAt: string,
+): boolean {
+  const info = db
+    .prepare(
+      `UPDATE translation_batch_jobs SET state = ?, completed_at = ?
+       WHERE id = ? AND completed_at IS NULL`,
+    )
+    .run(state, completedAt, jobId);
+  return info.changes > 0;
 }
 
 export function updateBatchItemStatus(

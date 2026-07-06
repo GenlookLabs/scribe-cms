@@ -3,13 +3,13 @@ import type { ScribeConfig, ScribeDocument } from "../core/types.js";
 import { readEnDocument } from "../loader/create-loader.js";
 import { recordEnSnapshot } from "../history/record-snapshot.js";
 import {
+  claimBatchJobCompletion,
   insertBatchItems,
   insertBatchJob,
   listBatchItems,
   listPendingBatchItems,
   listPendingBatchJobs,
   updateBatchItemStatus,
-  updateBatchJobState,
   type BatchItemRow,
   type BatchJobRow,
 } from "../storage/batch-jobs.js";
@@ -20,6 +20,7 @@ import {
   getGeminiBatchJob,
   isSuccessfulBatchState,
   isTerminalBatchState,
+  normalizeBatchState,
   textFromBatchResponse,
 } from "./gemini-batch.js";
 import { buildGeminiRequestConfig, parseGeminiResponse, usageFromResponse } from "./gemini-client.js";
@@ -192,6 +193,7 @@ export async function submitBatchJobPlan<
     model: displayModel,
     jobIndex,
     jobCount,
+    createdAt,
   });
   return row;
 }
@@ -259,16 +261,27 @@ function buildIngestContext(
 /**
  * Ingest a terminal batch job: run every pending item through the shared
  * finalize path (or mark it failed), update item statuses, and mark the job
- * completed. Returns one result per pending item.
+ * completed. Returns one result per pending item, or null when a concurrent
+ * scribe process already claimed and ingested the job (runs adopt each
+ * other's pending jobs, so two pollers can reach the same terminal job).
+ *
+ * The completion claim is stamped before items are processed so exactly one
+ * process ingests. Ingestion is synchronous end-to-end; should a hard kill
+ * still land mid-way, the leftover items are no longer counted in-flight and
+ * the next run simply resubmits them.
  */
 export function ingestBatchJob(
   config: ScribeConfig,
   jobRow: BatchJobRow,
   batchJob: BatchJobResultLike,
   onResult?: (result: TranslatePageResult) => void,
-): TranslatePageResult[] {
+): TranslatePageResult[] | null {
   const state = String(batchJob.state ?? "UNKNOWN");
   const db = openStore(config, "readwrite");
+  if (!claimBatchJobCompletion(db, jobRow.id, state, new Date().toISOString())) {
+    db.close();
+    return null;
+  }
   const pendingItems = listBatchItems(db, jobRow.id).filter((item) => item.status === "pending");
   const results: TranslatePageResult[] = [];
 
@@ -332,14 +345,14 @@ export function ingestBatchJob(
     }
   } else {
     // FAILED / CANCELLED / EXPIRED: every in-flight item fails with the job error.
-    const message = batchJob.error?.message ?? `Batch job ended in state ${state}`;
+    const message =
+      batchJob.error?.message ?? `Batch job ended in state ${normalizeBatchState(state)}`;
     const startedAt = Date.now();
     for (const itemRow of pendingItems) {
       failItem(itemRow, message, startedAt);
     }
   }
 
-  updateBatchJobState(db, jobRow.id, state, new Date().toISOString());
   db.close();
   return results;
 }
@@ -360,9 +373,16 @@ export async function pollAndIngestBatchJobs(
 ): Promise<void> {
   const jobCount = options.jobCount ?? jobs.length;
   const active = jobs.map((row, jobIndex) => ({ row, jobIndex }));
-  const startedAt = Date.now();
+  const loopStartedAt = Date.now();
   let delay = INITIAL_POLL_MS;
   let firstRound = true;
+
+  // Elapsed anchors to the job's actual submission time, so resumed jobs show
+  // their true age rather than time since this CLI started.
+  const elapsedFor = (row: BatchJobRow): number => {
+    const createdAtMs = Date.parse(row.created_at);
+    return Number.isNaN(createdAtMs) ? Date.now() - loopStartedAt : Date.now() - createdAtMs;
+  };
 
   while (active.length > 0) {
     if (!firstRound) {
@@ -373,18 +393,59 @@ export async function pollAndIngestBatchJobs(
 
     for (const tracked of [...active]) {
       const batchJob: BatchJob = await getGeminiBatchJob({ name: tracked.row.job_name });
-      const state = String(batchJob.state ?? "UNKNOWN");
+      const state = normalizeBatchState(batchJob.state);
       options.onProgress?.({
         type: "batch-polling",
         name: tracked.row.job_name,
         state,
-        elapsedMs: Date.now() - startedAt,
+        elapsedMs: elapsedFor(tracked.row),
         jobIndex: tracked.jobIndex,
         jobCount,
       });
       if (isTerminalBatchState(batchJob.state)) {
         active.splice(active.indexOf(tracked), 1);
-        ingestBatchJob(config, tracked.row, batchJob as BatchJobResultLike, options.onResult);
+        const results = ingestBatchJob(
+          config,
+          tracked.row,
+          batchJob as BatchJobResultLike,
+          options.onResult,
+        );
+        if (results === null) {
+          // A concurrent scribe process claimed the job first; its results
+          // are already in the store. Report that instead of zero counts.
+          options.onProgress?.({
+            type: "batch-done",
+            name: tracked.row.job_name,
+            state,
+            model: tracked.row.display_model,
+            count: 0,
+            jobIndex: tracked.jobIndex,
+            jobCount,
+            translated: 0,
+            failed: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            estimatedCostUsd: 0,
+            elapsedMs: elapsedFor(tracked.row),
+            alreadyIngested: true,
+          });
+          continue;
+        }
+        options.onProgress?.({
+          type: "batch-done",
+          name: tracked.row.job_name,
+          state,
+          model: tracked.row.display_model,
+          count: results.length,
+          jobIndex: tracked.jobIndex,
+          jobCount,
+          translated: results.filter((r) => !r.failed && !r.skipped).length,
+          failed: results.filter((r) => r.failed).length,
+          inputTokens: results.reduce((sum, r) => sum + (r.usage?.inputTokens ?? 0), 0),
+          outputTokens: results.reduce((sum, r) => sum + (r.usage?.outputTokens ?? 0), 0),
+          estimatedCostUsd: results.reduce((sum, r) => sum + (r.estimatedCostUsd ?? 0), 0),
+          elapsedMs: elapsedFor(tracked.row),
+        });
       }
     }
   }

@@ -55,6 +55,9 @@ export default defineConfig({
       "Never translate code identifiers, CLI commands, package names, or file paths.",
       "Keep scribe-cms and Genlook brand names in English.",
     ].join("\n"),
+    rules: [
+      "Never use em dashes in translated text, even when the source uses them. Rephrase with commas, colons, parentheses, or separate sentences.",
+    ],
   },
   types: [
     defineContentType({

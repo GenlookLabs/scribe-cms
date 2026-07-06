@@ -43,17 +43,54 @@ scribe translate --slug my-post   # one document
 scribe translate --dry-run        # show the worklist, write nothing
 scribe translate --force          # re-translate even when hashes match
 scribe translate --strategy missing-only   # skip stale, only fill gaps
-scribe translate --concurrency 5  # parallel requests (default 3)
+scribe translate --batch          # force batch mode (the default)
+scribe translate --direct         # per-page API calls, immediate results
+scribe translate --resume         # pick up pending batch jobs, submit nothing new
+scribe translate --concurrency 5  # parallel requests (direct mode only)
 scribe translate --model gemini-3.1-pro
 ```
 
-Run in a terminal, `scribe translate` shows a live progress UI with per-item
-status, running token counts, and an estimated cost in USD. Pass
-`--no-progress` (or run non-interactively, e.g. in CI) for plain line-by-line
-logging. Without flags in a TTY, it interactively asks for content type,
-locale preset, and strategy.
+Run in a terminal, `scribe translate` shows a live progress UI with batch job
+status, per-item results, running token counts, and an estimated cost in USD.
+Thinking tokens are included in the reported usage, so the estimate matches
+what Google bills. Pass `--no-progress` (or run non-interactively, e.g. in CI)
+for plain line-by-line logging. Without flags in a TTY, it interactively asks
+for content type, locale preset, strategy, and translation mode.
 
 Then commit `.scribe/store.sqlite`.
+
+## Batch mode and resuming
+
+By default the whole worklist goes through the Gemini Batch API, which halves
+the token cost compared to direct calls. Scribe plans every request upfront
+(one job per model, chunked for very large worklists), submits all jobs at
+once, then polls them together and stores each job's results the moment it
+completes. Batch jobs usually finish within minutes, but Google only
+guarantees completion within 24 hours, so the command waits rather than
+streaming results page by page.
+
+Every job is recorded in the SQLite store before polling starts, together
+with a snapshot of the English source each item was submitted from. That
+makes runs safe to interrupt:
+
+- Quit during polling (Ctrl+C) and nothing is lost.
+- `scribe translate --resume` checks pending jobs, ingests the finished ones,
+  and submits nothing new.
+- Running `scribe translate` normally also picks pending jobs back up first,
+  and items already in flight are never submitted twice.
+- Editing an English page while its batch is in flight is fine: the result is
+  stored against the snapshot it was translated from, then detected as stale
+  on the next run.
+- Overlapping runs are safe too. Because every run adopts pending jobs, two
+  live processes can end up polling the same job; completion is claimed
+  atomically in the store, so exactly one run ingests the results. The other
+  reports the job as "already ingested by another scribe run" instead of
+  counting it.
+
+Prefer immediate, page-by-page results at full price? Use `--direct`, which
+restores per-page API calls with `--concurrency` parallelism. Transient API
+errors (429, 5xx, network drops) are retried automatically with exponential
+backoff in both modes.
 
 ## Output validation
 

@@ -106,8 +106,10 @@ are inferred from the config — no codegen.
 ```bash
 scribe status                  # EN docs + translation coverage
 scribe validate                # schemas, MDX bodies, relations, redirects, sqlite consistency
-scribe translate --locale fr   # translate stale/missing pages (Gemini)
-scribe translate --preset active --strategy missing-only --concurrency 5
+scribe translate --locale fr   # translate stale/missing pages (Gemini Batch API, 50% token cost)
+scribe translate --preset active --strategy missing-only
+scribe translate --direct      # per-page API calls at full price, immediate results
+scribe translate --resume      # pick up pending batch jobs from an interrupted run
 scribe translate --dry-run     # show the worklist without calling the API
 scribe history blog my-post fr # EN snapshot timeline for one document
 scribe studio                  # read-only local admin UI
@@ -118,6 +120,11 @@ Translated output is checked before it is stored: the returned MDX body must
 parse and the frontmatter must re-validate against your Zod schema, so a bad
 model response fails the command instead of reaching production. Interactive
 runs show live progress with token counts and an estimated cost in USD.
+
+Translation runs through the Gemini Batch API by default (half the token
+cost). Jobs are persisted in the store as soon as they are submitted, so
+interrupting a run is safe: the next `scribe translate` (or `--resume`) picks
+pending jobs back up without submitting anything twice.
 
 Translations are stored in `.scribe/store.sqlite` keyed by a hash of the EN
 translatable content, so `scribe translate` only re-translates what changed.

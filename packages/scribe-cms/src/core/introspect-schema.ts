@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { getFieldKind, getRelationTarget, unwrapSchema } from "./field.js";
+import { getFieldKind, getRelationTarget, peelOptionalWrappers } from "./field.js";
 
 export interface SchemaFieldMeta {
   path: string[];
@@ -9,7 +9,24 @@ export interface SchemaFieldMeta {
   relationOptional?: boolean;
 }
 
-/** List schema fields with translatable/structural/relation metadata. */
+function getArrayElement(schema: z.ZodTypeAny): z.ZodTypeAny | null {
+  if (
+    schema instanceof Object &&
+    "element" in schema &&
+    (schema as z.ZodTypeAny & { _def?: { type?: string } })._def?.type === "array"
+  ) {
+    return (schema as z.ZodArray<z.ZodTypeAny>).element as z.ZodTypeAny;
+  }
+  return null;
+}
+
+/**
+ * List schema fields with translatable/structural/relation metadata.
+ * Array-of-object fields recurse with a `*` path segment (`steps.*.title`) so
+ * extraction and merging preserve the array shape. Note: `peelOptionalWrappers`
+ * is used (not `unwrapSchema`) because zod v4 arrays expose `unwrap()`, which
+ * would silently flatten the array level out of the paths.
+ */
 export function introspectSchema(schema: z.ZodTypeAny, prefix: string[] = []): SchemaFieldMeta[] {
   const relation = getRelationTarget(schema);
   if (relation && prefix.length > 0) {
@@ -24,7 +41,13 @@ export function introspectSchema(schema: z.ZodTypeAny, prefix: string[] = []): S
     ];
   }
 
-  const base = unwrapSchema(schema);
+  // An explicit translatable mark makes the whole subtree one translation unit
+  // (e.g. field.translatable(z.array(z.string()))).
+  if (prefix.length > 0 && getFieldKind(schema) === "translatable") {
+    return [{ path: prefix, kind: "translatable" }];
+  }
+
+  const base = peelOptionalWrappers(schema);
   if (base instanceof Object && "shape" in base) {
     const shape = (base as z.ZodObject<z.ZodRawShape>).shape;
     const fields: SchemaFieldMeta[] = [];
@@ -34,9 +57,9 @@ export function introspectSchema(schema: z.ZodTypeAny, prefix: string[] = []): S
     return fields;
   }
 
-  if (base instanceof Object && "element" in base) {
-    const element = (base as z.ZodArray<z.ZodTypeAny>).element;
-    const elementBase = unwrapSchema(element);
+  const element = getArrayElement(base);
+  if (element) {
+    const elementBase = peelOptionalWrappers(element);
     if (elementBase instanceof Object && "shape" in elementBase) {
       const shape = (elementBase as z.ZodObject<z.ZodRawShape>).shape;
       const fields: SchemaFieldMeta[] = [];
@@ -50,18 +73,63 @@ export function introspectSchema(schema: z.ZodTypeAny, prefix: string[] = []): S
   return [{ path: prefix, kind: getFieldKind(schema) }];
 }
 
+interface PathTrie {
+  leaf: boolean;
+  children: Map<string, PathTrie>;
+}
+
+function buildPathTrie(paths: string[][]): PathTrie {
+  const root: PathTrie = { leaf: false, children: new Map() };
+  for (const path of paths) {
+    let node = root;
+    for (const segment of path) {
+      let child = node.children.get(segment);
+      if (!child) {
+        child = { leaf: false, children: new Map() };
+        node.children.set(segment, child);
+      }
+      node = child;
+    }
+    node.leaf = true;
+  }
+  return root;
+}
+
+function extractNode(data: unknown, trie: PathTrie): unknown {
+  if (trie.leaf) return data;
+
+  const star = trie.children.get("*");
+  if (star) {
+    if (!Array.isArray(data)) return undefined;
+    // Preserve array length so structural/translatable halves merge per index.
+    return data.map((item) =>
+      typeof item === "object" && item !== null ? (extractNode(item, star) ?? {}) : {},
+    );
+  }
+
+  if (typeof data !== "object" || data === null || Array.isArray(data)) return undefined;
+  const record = data as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  let any = false;
+  for (const [key, child] of trie.children) {
+    const value = extractNode(record[key], child);
+    if (value !== undefined) {
+      out[key] = value;
+      any = true;
+    }
+  }
+  return any ? out : undefined;
+}
+
 export function extractByPaths(
   data: Record<string, unknown>,
   paths: string[][],
 ): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const path of paths) {
-    const value = getAtPath(data, path);
-    if (value !== undefined) {
-      setAtPath(out, path.filter((p) => p !== "*"), value);
-    }
-  }
-  return out;
+  if (paths.length === 0) return {};
+  const extracted = extractNode(data, buildPathTrie(paths));
+  return extracted && typeof extracted === "object" && !Array.isArray(extracted)
+    ? (extracted as Record<string, unknown>)
+    : {};
 }
 
 /** Extract frontmatter fields marked as translatable. */
@@ -89,36 +157,6 @@ export function mergeStructuralOntoLocale(
   const structural = pickStructural(enData, schema);
   const translatable = pickTranslatable(localeData, schema);
   return deepMerge(structural, translatable);
-}
-
-function getAtPath(obj: Record<string, unknown>, path: string[]): unknown {
-  let current: unknown = obj;
-  for (const segment of path) {
-    if (segment === "*") {
-      if (!Array.isArray(current)) return undefined;
-      return current.map((item) =>
-        typeof item === "object" && item !== null
-          ? getAtPath(item as Record<string, unknown>, path.slice(path.indexOf("*") + 1))
-          : undefined,
-      );
-    }
-    if (typeof current !== "object" || current === null || Array.isArray(current)) return undefined;
-    current = (current as Record<string, unknown>)[segment];
-  }
-  return current;
-}
-
-function setAtPath(obj: Record<string, unknown>, path: string[], value: unknown): void {
-  if (path.length === 0) return;
-  if (path.length === 1) {
-    obj[path[0]!] = value;
-    return;
-  }
-  const [head, ...rest] = path;
-  if (!(head! in obj) || typeof obj[head!] !== "object" || obj[head!] === null) {
-    obj[head!] = {};
-  }
-  setAtPath(obj[head!] as Record<string, unknown>, rest, value);
 }
 
 function deepMerge(base: Record<string, unknown>, overlay: Record<string, unknown>): Record<string, unknown> {

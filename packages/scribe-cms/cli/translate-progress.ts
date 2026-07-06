@@ -25,6 +25,42 @@ function labelForResult(result: TranslatePageResult): string {
   return `${result.contentType}/${result.enSlug}@${result.locale}`;
 }
 
+/** Last path segment of a Gemini job name: "batches/abc123" -> "abc123". */
+function shortJobId(name: string): string {
+  const segments = name.split("/");
+  return segments[segments.length - 1] || name;
+}
+
+function formatElapsed(elapsedMs: number): string {
+  return `${Math.round(elapsedMs / 1000)}s`;
+}
+
+/**
+ * Build the per-job completion summary shown once a batch job is ingested:
+ * short id, model, request count, translated/failed counts, tokens, cost.
+ */
+function batchDoneParts(event: Extract<TranslateProgressEvent, { type: "batch-done" }>): string {
+  if (event.alreadyIngested) {
+    return [
+      `job ${shortJobId(event.name)}`,
+      event.model ?? "?",
+      "already ingested by another scribe run (results saved there)",
+      formatElapsed(event.elapsedMs),
+    ].join(" · ");
+  }
+  const parts = [
+    `job ${shortJobId(event.name)}`,
+    event.model ?? "?",
+    `${event.count} request${event.count === 1 ? "" : "s"}`,
+    `${event.translated} translated`,
+  ];
+  if (event.failed > 0) parts.push(`${event.failed} failed`);
+  parts.push(`${formatTokenCount(event.inputTokens)} in / ${formatTokenCount(event.outputTokens)} out`);
+  parts.push(`${formatUsd(event.estimatedCostUsd)} est.`);
+  parts.push(formatElapsed(event.elapsedMs));
+  return parts.join(" · ");
+}
+
 function statusForResult(result: TranslatePageResult, dryRun: boolean): string {
   if (result.failed) return red("failed");
   if (result.skipped) return dim("skipped");
@@ -93,8 +129,14 @@ export function createTranslateProgressReporter(options: {
         }
         if (event.type === "batch-polling") {
           console.log(
-            `batch ${event.jobIndex + 1}/${event.jobCount} ${event.name}: ${event.state.replace(/^JOB_STATE_/, "")} (${Math.round(event.elapsedMs / 1000)}s elapsed)`,
+            `batch ${event.jobIndex + 1}/${event.jobCount} ${shortJobId(event.name)}: ${event.state.replace(/^JOB_STATE_/, "")} (${formatElapsed(event.elapsedMs)} elapsed)`,
           );
+          return;
+        }
+        if (event.type === "batch-done") {
+          const line = `batch ${event.jobIndex + 1}/${event.jobCount} ${event.state} · ${batchDoneParts(event)}`;
+          if (event.failed > 0 && event.translated === 0) console.error(line);
+          else console.log(line);
           return;
         }
         if (event.type === "item-done") {
@@ -128,7 +170,10 @@ export function createTranslateProgressReporter(options: {
   let estimatedCostUsd = 0;
   let active: string[] = [];
   let mode: "batch" | "direct" | undefined;
-  const batchJobs = new Map<string, { state: string; count: number }>();
+  const batchJobs = new Map<
+    string,
+    { state: string; count: number; model?: string; createdAtMs?: number; elapsedMs: number }
+  >();
   let batchElapsedMs = 0;
   const recent: TranslatePageResult[] = [];
   let renderedLines = 0;
@@ -146,6 +191,21 @@ export function createTranslateProgressReporter(options: {
       process.stdout.write("\x1b[?25h");
       cursorHidden = false;
     }
+  }
+
+  /**
+   * Print permanent line(s) above the live status area: rewind over the current
+   * render, clear it, write the lines with newlines (they scroll up and stay),
+   * then let the next render() redraw the live area beneath them.
+   */
+  function printPersistent(lines: string[]): void {
+    if (renderedLines > 0) {
+      process.stdout.write(`\x1b[${renderedLines}A`);
+    }
+    for (const line of lines) {
+      process.stdout.write("\x1b[2K" + line + "\n");
+    }
+    renderedLines = 0;
   }
 
   function render(): void {
@@ -186,6 +246,18 @@ export function createTranslateProgressReporter(options: {
           `${running} running · ${finished} done` +
           dim(` · ${requests} request${requests === 1 ? "" : "s"} · ${Math.round(batchElapsedMs / 1000)}s elapsed`),
       );
+      // One detail line per still-pending job: short id, model, requests, state,
+      // elapsed since its own submission (anchored to created_at upstream).
+      for (const [name, job] of batchJobs) {
+        if (terminal.test(job.state)) continue;
+        lines.push(
+          dim("  ") +
+            shortJobId(name) +
+            dim(` · ${job.model ?? "?"} · ${job.count} req · `) +
+            job.state +
+            dim(` · ${formatElapsed(job.elapsedMs)}`),
+        );
+      }
     } else if (active.length > 0) {
       lines.push(dim("Active ") + active.slice(0, 3).join(", ") + (active.length > 3 ? dim(` +${active.length - 3}`) : ""));
     } else if (done < total) {
@@ -224,17 +296,54 @@ export function createTranslateProgressReporter(options: {
           active = event.active;
           render();
           break;
-        case "batch-submitted":
-          batchJobs.set(event.name, { state: "SUBMITTED", count: event.count });
+        case "batch-submitted": {
+          const createdAtMs = event.createdAt ? Date.parse(event.createdAt) : undefined;
+          const elapsedMs =
+            createdAtMs && !Number.isNaN(createdAtMs) ? Date.now() - createdAtMs : 0;
+          batchJobs.set(event.name, {
+            state: event.resumed ? "RESUMED" : "SUBMITTED",
+            count: event.count,
+            model: event.model,
+            createdAtMs: Number.isNaN(createdAtMs) ? undefined : createdAtMs,
+            elapsedMs,
+          });
+          // Persist a line per job so it stays visible after the live area is
+          // redrawn — otherwise a run that adopts jobs from a previous run
+          // gives no clue where its jobs came from.
+          const requests = `${event.count} ${event.resumed ? "pending " : ""}request${event.count === 1 ? "" : "s"}`;
+          const origin = event.resumed
+            ? `resumed job (submitted ${formatElapsed(elapsedMs)} ago)`
+            : "submitted job";
+          printPersistent([
+            dim(`${event.resumed ? "↻" : "→"} ${origin} ${shortJobId(event.name)} · ${event.model ?? "?"} · ${requests}`),
+          ]);
           render();
           break;
+        }
         case "batch-polling": {
           const job = batchJobs.get(event.name);
           batchJobs.set(event.name, {
             state: event.state.replace(/^JOB_STATE_/, ""),
             count: job?.count ?? 0,
+            model: job?.model,
+            createdAtMs: job?.createdAtMs,
+            elapsedMs: event.elapsedMs,
           });
           batchElapsedMs = Math.max(batchElapsedMs, event.elapsedMs);
+          render();
+          break;
+        }
+        case "batch-done": {
+          const job = batchJobs.get(event.name);
+          batchJobs.set(event.name, {
+            state: event.state.replace(/^JOB_STATE_/, ""),
+            count: job?.count ?? event.count,
+            model: job?.model ?? event.model,
+            createdAtMs: job?.createdAtMs,
+            elapsedMs: event.elapsedMs,
+          });
+          const marker = event.failed > 0 && event.translated === 0 ? red("✗") : green("✓");
+          printPersistent([`${marker} ${dim(batchDoneParts(event))}`]);
           render();
           break;
         }

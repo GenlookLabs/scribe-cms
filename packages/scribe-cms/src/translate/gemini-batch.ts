@@ -1,31 +1,39 @@
 import {
-  GoogleGenAI,
-  JobState,
   type BatchJob,
+  GoogleGenAI,
+  type JobState,
   type GenerateContentResponse,
   type InlinedRequest,
 } from "@google/genai";
 import { withRetry } from "./retry.js";
 
-const TERMINAL_STATES = new Set<JobState>([
-  JobState.JOB_STATE_SUCCEEDED,
-  JobState.JOB_STATE_FAILED,
-  JobState.JOB_STATE_CANCELLED,
-  JobState.JOB_STATE_EXPIRED,
-  JobState.JOB_STATE_PARTIALLY_SUCCEEDED,
+// The SDK documents JOB_STATE_* names but the live API reports BATCH_STATE_*;
+// the SDK maps only the states it knows to JOB_STATE_* and passes the rest
+// through, so both families (and states persisted in either form) must be
+// tolerated. Compare on the bare state name.
+const STATE_FAMILY_PREFIX = /^(JOB_STATE_|BATCH_STATE_)/;
+
+const TERMINAL_STATES = new Set([
+  "SUCCEEDED",
+  "FAILED",
+  "CANCELLED",
+  "EXPIRED",
+  "PARTIALLY_SUCCEEDED",
 ]);
 
-const SUCCESSFUL_STATES = new Set<JobState>([
-  JobState.JOB_STATE_SUCCEEDED,
-  JobState.JOB_STATE_PARTIALLY_SUCCEEDED,
-]);
+const SUCCESSFUL_STATES = new Set(["SUCCEEDED", "PARTIALLY_SUCCEEDED"]);
+
+/** Strip the JOB_STATE_/BATCH_STATE_ family prefix: "BATCH_STATE_RUNNING" -> "RUNNING". */
+export function normalizeBatchState(state: JobState | string | undefined): string {
+  return String(state ?? "UNKNOWN").replace(STATE_FAMILY_PREFIX, "");
+}
 
 export function isTerminalBatchState(state: JobState | string | undefined): boolean {
-  return state !== undefined && TERMINAL_STATES.has(state as JobState);
+  return TERMINAL_STATES.has(normalizeBatchState(state));
 }
 
 export function isSuccessfulBatchState(state: JobState | string | undefined): boolean {
-  return state !== undefined && SUCCESSFUL_STATES.has(state as JobState);
+  return SUCCESSFUL_STATES.has(normalizeBatchState(state));
 }
 
 function makeClient(apiKey?: string): GoogleGenAI {
