@@ -17,6 +17,7 @@ export default defineConfig({
   locales: ["en", "fr", "de"],
   defaultLocale: "en",               // default
   localeRouting: { strategy: "path-prefix", prefixDefaultLocale: false },
+  localeFallbacks: true,             // default
   localePresets: { active: ["fr"] },
   translate: { /* see the translation page */ },
   types: [ /* defineContentType(...) */ ],
@@ -32,6 +33,7 @@ export default defineConfig({
 | `locales` | — (required) | All locales, including the default one. |
 | `defaultLocale` | `"en"` | Canonical source locale. Must appear in `locales`. |
 | `localeRouting` | path-prefix, unprefixed default | How locale markers appear in generated URLs. `path-prefix` prepends the locale (omitting the default locale unless `prefixDefaultLocale` is true). `search-param` appends `?param=locale` for non-default locales. |
+| `localeFallbacks` | `true` | Derive locale fallback chains from locale tags: a regional variant with no translation of a document is served the closest base-language translation (e.g. `pt-BR` falls back to `pt`) before the default-locale fallback. Set `false` to disable. See [Locale fallback chains](#locale-fallback-chains). |
 | `localePresets` | — | Named locale groups for `scribe translate --preset name`. |
 | `translate` | — | Project-wide translation defaults ([translation](/docs/translation)). |
 | `types` | — (required) | Content type definitions. |
@@ -100,6 +102,12 @@ Translatable markers also work on fields nested inside plain arrays or objects (
 Constraints go in the options object — **not** chained Zod methods. Chaining (`.max(8)`, `.optional()`) clones the schema and would strip the relation metadata.
 
 Relations always store **English slugs**, are checked by `scribe validate` (a dangling required relation is a build-blocking error; a dangling optional one is a warning), and are dereferenced at runtime with `related()` — see the [runtime API](/docs/runtime-api).
+
+## Locale fallback chains
+
+By default, a regional locale with no translation of a document is served its base language before the default locale: each locale tries the successively shorter prefixes of its own tag that are also in `locales`, so `fr-CA` falls back to `fr`, and `zh-Hant-TW` tries `zh-Hant`, then `zh`. Set `localeFallbacks: false` to disable. The default locale is never part of a chain; it stays the final fallback, governed by the type's `indexFallback`.
+
+Fallbacks apply to `resolve()` (the served locale is reported in `actualLocale`, and slug redirects use the fallback locale's slug) and `staticParams()` (prerendered slugs match what `resolve()` serves). They deliberately do **not** apply to `get()`, `list()`, `translation()`, `alternates()`, or the sitemap: those stay exact-match.
 
 ## Typed client types
 

@@ -10,6 +10,7 @@ export function resolveLocalizedDocument<TDoc extends ScribeDocument>(
   allDocs: ReadonlyMap<string, { bySlug: ReadonlyMap<string, TDoc>; byEnSlug: ReadonlyMap<string, TDoc> }>,
   type: ContentTypeConfig,
   localeRouting?: LocaleRoutingConfig,
+  fallbackLocales: readonly string[] = [],
 ): ResolvedDocument<TDoc> {
   const urlBuilder = createUrlBuilder({
     locales: [defaultLocale, locale],
@@ -27,15 +28,35 @@ export function resolveLocalizedDocument<TDoc extends ScribeDocument>(
     const found = docIdx.bySlug.get(slug);
     if (!found) continue;
 
-    const correctSlug = getSlugForLocale(found, docLocale, locale, allDocs, defaultLocale);
-    if (correctSlug && correctSlug !== slug) {
+    const enSlug = docLocale === defaultLocale ? found.slug : found.enSlug;
+
+    // Which document should canonically serve the requested locale? Try the
+    // requested locale first, then its configured fallback chain.
+    let target: TDoc | undefined;
+    let targetLocale = locale;
+    for (const candidateLocale of [locale, ...fallbackLocales]) {
+      const cand =
+        candidateLocale === defaultLocale
+          ? allDocs.get(candidateLocale)?.bySlug.get(enSlug)
+          : allDocs.get(candidateLocale)?.byEnSlug.get(enSlug);
+      if (cand) {
+        target = cand;
+        targetLocale = candidateLocale;
+        break;
+      }
+    }
+
+    if (target) {
+      if (target.slug === slug) {
+        return { document: target, actualLocale: targetLocale };
+      }
       if (!type.path) {
         return { document: null, actualLocale: locale };
       }
       return {
         document: null,
         actualLocale: locale,
-        shouldRedirectTo: urlBuilder.resolvePath(type.path, correctSlug, locale),
+        shouldRedirectTo: urlBuilder.resolvePath(type.path, target.slug, locale),
       };
     }
 

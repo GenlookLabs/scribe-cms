@@ -40,6 +40,7 @@ export default defineConfig({
   // store: ".scribe/store.sqlite"     (default)
   locales: ["en", "fr"],
   // defaultLocale: "en"              (default)
+  // localeFallbacks: true            (default: regional variants fall back to their base language, e.g. pt-BR to pt; set false to disable)
   types: [
     defineContentType({
       id: "blog",
@@ -82,7 +83,7 @@ const scribe = createScribe(config);
 // Lists & lookups
 scribe.blog.list("fr");                       // sorted docs for a locale
 scribe.blog.get("my-post");                   // exact slug lookup, no fallback
-const r = scribe.blog.resolve("my-post", "fr"); // cross-locale slug fix + EN fallback
+const r = scribe.blog.resolve("my-post", "fr"); // cross-locale slug fix + fallback chain + EN fallback
 // r = { document, actualLocale, shouldRedirectTo?, canonicalPath? }
 
 // Routing helpers

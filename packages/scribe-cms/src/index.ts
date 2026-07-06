@@ -25,6 +25,7 @@ export type {
   TranslateConfig,
   ScribeTranslateDefaults,
   LocalePresets,
+  LocaleFallbacks,
   LocaleRoutingConfig,
   SlugStrategy,
   IndexFallback,

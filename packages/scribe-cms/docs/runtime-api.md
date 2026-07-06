@@ -68,8 +68,12 @@ const r = scribe.blog.resolve(slug, locale);
 // }
 ```
 
-Handles, in order: direct hit → wrong-locale slug redirect → English fallback
-(when `indexFallback: "en"`). Slug migrations and retired documents are handled
+Handles, in order: direct hit → wrong-locale slug redirect → locale fallback
+chain (on by default; see
+[Configuration](./configuration.md#locale-fallback-chains)) → English fallback
+(when `indexFallback: "en"`). When a fallback locale serves the page,
+`actualLocale` is that locale and slug correction is chain-aware. Slug
+migrations and retired documents are handled
 by `_redirects.json` rules in your proxy/static redirect map, not by
 `resolve()`. A typical page handler (Next.js shown; map to your framework's
 redirect/404 primitives):
@@ -97,8 +101,10 @@ export function generateStaticParams() {
 scribe.blog.staticParams({ locales: ["en", "fr", "de"] });
 ```
 
-Untranslated pages fall back to the English slug so the EN-fallback page is
-still prerendered.
+For a locale without a translation, the prerendered slug comes from the first
+locale fallback chain locale that has one (then the English slug), so
+prerendered URLs match what `resolve()` serves. See
+[Configuration](./configuration.md#locale-fallback-chains).
 
 ### `alternates(doc)`
 

@@ -1,6 +1,7 @@
 import path from "node:path";
 import type {
   ContentTypeConfig,
+  LocaleFallbacks,
   ScribeConfig,
   ScribeConfigInput,
 } from "../core/types.js";
@@ -53,6 +54,11 @@ export function resolveConfig(
     throw new Error('scribe config: localeRouting search-param requires a "param" name');
   }
 
+  const localeFallbacks =
+    raw.localeFallbacks === false
+      ? {}
+      : deriveLocaleFallbacks(raw.locales, defaultLocale);
+
   const projectRoot = path.resolve(baseDir ?? process.cwd(), raw.rootDir);
   const contentRoot = path.resolve(projectRoot, raw.contentDir ?? "content");
   const storePath = path.resolve(projectRoot, raw.store ?? ".scribe/store.sqlite");
@@ -84,6 +90,7 @@ export function resolveConfig(
     defaultLocale,
     localeRouting,
     localePresets: raw.localePresets,
+    localeFallbacks,
     translate: raw.translate,
     types,
   };
@@ -92,4 +99,35 @@ export function resolveConfig(
     enumerable: false,
   });
   return config;
+}
+
+/**
+ * Derive fallback chains from locale tags: each locale falls back to its
+ * successively shorter tag prefixes (longest first) that are themselves
+ * configured, e.g. `"zh-Hant-TW"` → `["zh-Hant", "zh"]`. Prefix matching is
+ * case-insensitive (BCP-47 casing varies); chains store the configured
+ * spelling. The default locale is excluded — it stays the implicit final
+ * fallback so `indexFallback: "none"` keeps its meaning.
+ */
+function deriveLocaleFallbacks(
+  locales: readonly string[],
+  defaultLocale: string,
+): LocaleFallbacks {
+  const byLowercase = new Map(locales.map((l) => [l.toLowerCase(), l]));
+  const fallbacks: LocaleFallbacks = {};
+  for (const locale of locales) {
+    const subtags = locale.split("-");
+    if (subtags.length < 2) continue;
+    const chain: string[] = [];
+    for (let end = subtags.length - 1; end >= 1; end--) {
+      const prefix = byLowercase.get(subtags.slice(0, end).join("-").toLowerCase());
+      if (prefix && prefix !== locale && prefix !== defaultLocale) {
+        chain.push(prefix);
+      }
+    }
+    if (chain.length > 0) {
+      fallbacks[locale] = chain;
+    }
+  }
+  return fallbacks;
 }

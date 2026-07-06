@@ -62,4 +62,66 @@ describe("resolveConfig", () => {
       /exactly one \{slug\}/,
     );
   });
+
+  describe("localeFallbacks", () => {
+    it("derives chains from locale tags when omitted (default enabled)", () => {
+      const config = resolveConfig({
+        ...base,
+        locales: ["en", "pt", "pt-BR"],
+      });
+      assert.deepEqual(config.localeFallbacks, { "pt-BR": ["pt"] });
+    });
+
+    it("derives a region → language chain", () => {
+      const config = resolveConfig({
+        ...base,
+        locales: ["en", "fr", "fr-CA"],
+      });
+      assert.deepEqual(config.localeFallbacks, { "fr-CA": ["fr"] });
+    });
+
+    it("orders multi-subtag chains longest prefix first", () => {
+      const config = resolveConfig({
+        ...base,
+        locales: ["en", "zh", "zh-Hant", "zh-Hant-TW"],
+      });
+      assert.deepEqual(config.localeFallbacks, {
+        "zh-Hant-TW": ["zh-Hant", "zh"],
+        "zh-Hant": ["zh"],
+      });
+    });
+
+    it("excludes the defaultLocale from chains (it stays the implicit final fallback)", () => {
+      const config = resolveConfig({
+        ...base,
+        locales: ["en", "en-GB"],
+      });
+      assert.deepEqual(config.localeFallbacks, {});
+    });
+
+    it("matches prefixes case-insensitively but stores the configured spelling", () => {
+      const config = resolveConfig({
+        ...base,
+        locales: ["en", "PT", "pt-br"],
+      });
+      assert.deepEqual(config.localeFallbacks, { "pt-br": ["PT"] });
+    });
+
+    it("skips prefixes that are not configured locales", () => {
+      const config = resolveConfig({
+        ...base,
+        locales: ["en", "zh", "zh-Hant-TW"],
+      });
+      assert.deepEqual(config.localeFallbacks, { "zh-Hant-TW": ["zh"] });
+    });
+
+    it("resolves to an empty object when disabled", () => {
+      const config = resolveConfig({
+        ...base,
+        locales: ["en", "pt", "pt-BR"],
+        localeFallbacks: false,
+      });
+      assert.deepEqual(config.localeFallbacks, {});
+    });
+  });
 });

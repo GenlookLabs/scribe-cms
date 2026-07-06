@@ -77,6 +77,7 @@ function buildRuntime(
         load(),
         type,
         config.localeRouting,
+        config.localeFallbacks[locale] ?? [],
       );
       if (result.document && type.path) {
         return {
@@ -99,11 +100,21 @@ function buildRuntime(
       const params: StaticParam[] = [];
       for (const locale of options.locales ?? config.locales) {
         const localeIdx = all.get(locale);
+        const fallbacks = config.localeFallbacks[locale] ?? [];
         for (const doc of enIdx.bySlug.values()) {
-          const slug =
-            locale === config.defaultLocale
-              ? doc.slug
-              : (localeIdx?.byEnSlug.get(doc.slug)?.slug ?? doc.slug);
+          let slug: string;
+          if (locale === config.defaultLocale) {
+            slug = doc.slug;
+          } else {
+            // Prefer the locale's own translated slug, then each fallback
+            // locale's translated slug, then the EN slug — matching resolve().
+            slug =
+              localeIdx?.byEnSlug.get(doc.slug)?.slug ??
+              fallbacks
+                .map((fb) => all.get(fb)?.byEnSlug.get(doc.slug)?.slug)
+                .find((s): s is string => s !== undefined) ??
+              doc.slug;
+          }
           params.push({ locale, slug });
         }
       }

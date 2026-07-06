@@ -1,0 +1,8 @@
+---
+version: "0.0.14"
+publishedAt: "2026-07-06"
+---
+
+## Added
+
+- Automatic locale fallback chains: a regional locale with no translation of a page is now served its base language before English (`fr-CA` falls back to `fr`, `zh-Hant-TW` tries `zh-Hant`, then `zh`). `resolve()` reports the served locale in `actualLocale`, slug redirects use the fallback locale's slug, and `staticParams()` prerenders matching URLs. On by default; set `localeFallbacks: false` in `scribe.config.ts` to disable

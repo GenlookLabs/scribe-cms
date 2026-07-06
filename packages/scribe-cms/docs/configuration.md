@@ -16,6 +16,7 @@ export default defineConfig({
   locales: ["en", "fr", "de"],
   defaultLocale: "en",              // default
   localeRouting: { strategy: "path-prefix", prefixDefaultLocale: false },
+  // localeFallbacks: true           (default: pt-BR falls back to pt)
   localePresets: { active: ["fr"] },
   translate: { /* see Translation docs */ },
   types: [ /* defineContentType(...) */ ],
@@ -31,6 +32,7 @@ export default defineConfig({
 | `locales` | — (required) | All locales, including the default one. |
 | `defaultLocale` | `"en"` | Canonical source locale. Must appear in `locales`. |
 | `localeRouting` | `{ strategy: "path-prefix", prefixDefaultLocale: false }` | How locale markers appear in generated URLs. `path-prefix` prepends `/{locale}` (omit for default locale when `prefixDefaultLocale` is false). `search-param` appends `?{param}={locale}` for non-default locales. |
+| `localeFallbacks` | `true` | Regional locales fall back to their base language when a translation is missing (`pt-BR` to `pt`). Set `false` to disable. See [Locale fallback chains](#locale-fallback-chains). |
 | `localePresets` | — | Named locale groups for `scribe translate --preset <name>`. |
 | `translate` | — | Project-wide translation defaults ([Translation](./translation.md)). |
 | `types` | — (required) | Content type definitions. |
@@ -104,6 +106,21 @@ Relations always store **English slugs**, are checked by `scribe validate`
 (a dangling required relation is a build-blocking error; a dangling optional
 one is a warning), and are dereferenced at runtime with
 [`related()`](./runtime-api.md#relations).
+
+## Locale fallback chains
+
+By default, a regional locale with no translation of a document is served its
+base language before the default locale: each locale tries the successively
+shorter prefixes of its own tag that are also in `locales`, so `fr-CA` falls
+back to `fr`, and `zh-Hant-TW` tries `zh-Hant`, then `zh`. Set
+`localeFallbacks: false` to disable. The default locale is never part of a
+chain; it stays the final fallback, governed by the type's `indexFallback`.
+
+Fallbacks apply to `resolve()` (the served locale is reported in
+`actualLocale`, and slug redirects use the fallback locale's slug) and
+`staticParams()` (prerendered slugs match what `resolve()` serves). They
+deliberately do **not** apply to `get()`, `list()`, `translation()`,
+`alternates()`, or the sitemap: those stay exact-match.
 
 ## Typed client types
 

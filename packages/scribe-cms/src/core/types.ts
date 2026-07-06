@@ -46,6 +46,9 @@ export interface LocalePresets {
   [name: string]: string[] | undefined;
 }
 
+/** Derived fallback chains: locale → ordered locales tried before the default locale when the locale has no translation. */
+export type LocaleFallbacks = Record<string, string[]>;
+
 /** How non-default locales appear in generated URLs. */
 export type LocaleRoutingConfig =
   | { strategy: "path-prefix"; prefixDefaultLocale?: boolean }
@@ -131,6 +134,8 @@ export interface ScribeConfigInput<
   /** How locale markers are applied to generated URLs. Default: path-prefix without default locale. */
   localeRouting?: LocaleRoutingConfig;
   localePresets?: LocalePresets;
+  /** Enable automatic locale fallback chains derived from locale tags — e.g. `"pt-BR"` is served from `"pt"` (before the default locale) when it has no translation. Default: `true`. */
+  localeFallbacks?: boolean;
   translate?: ScribeTranslateDefaults;
   types: TTypes;
 }
@@ -150,6 +155,8 @@ export interface ScribeConfig {
   defaultLocale: string;
   localeRouting: LocaleRoutingConfig;
   localePresets?: LocalePresets;
+  /** Fallback chains derived from locale tags (`{}` when the feature is disabled). */
+  localeFallbacks: LocaleFallbacks;
   translate?: ScribeTranslateDefaults;
   types: ContentTypeConfig[];
 }
