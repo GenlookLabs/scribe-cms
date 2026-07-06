@@ -29,6 +29,17 @@ export function defaultLocalizationPrompt(localeName: string, locale: string): s
   ].join(" ");
 }
 
+/** Type/project `translate.prompt` extras are appended before the locale directive. */
+export function buildLocalizationPrompt(
+  promptOverride: string | undefined,
+  localeName: string,
+  locale: string,
+): string {
+  const localeDirective = defaultLocalizationPrompt(localeName, locale);
+  if (!promptOverride) return localeDirective;
+  return `${promptOverride}\n\n${localeDirective}`;
+}
+
 /**
  * Static, locale-independent framing. Kept first so the whole prompt PREFIX
  * (framing + context + rules + EN payload) is byte-identical across every locale
@@ -84,9 +95,11 @@ export function buildPageTranslationPrompt(input: {
   previousError?: string;
 }): string {
   const localeName = LOCALE_NAMES[input.targetLocale] ?? input.targetLocale;
-  const localizationPrompt =
-    input.resolved.promptOverride ??
-    defaultLocalizationPrompt(localeName, input.targetLocale);
+  const localizationPrompt = buildLocalizationPrompt(
+    input.resolved.promptOverride,
+    localeName,
+    input.targetLocale,
+  );
 
   // PREFIX — locale-independent. Identical for every locale of a given page.
   const prefix = [

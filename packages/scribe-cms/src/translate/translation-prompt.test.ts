@@ -119,6 +119,30 @@ describe("buildPageTranslationPrompt prefix caching invariant", () => {
     );
   });
 
+  it("appends the locale directive after a type-level prompt override (fixed slug)", () => {
+    const verticalPrompt =
+      "Localize this vertical landing page. Write persuasive copy with an LLM-citable TL;DR. Preserve source tone and brand voice.";
+    const prompt = buildPageTranslationPrompt({
+      resolved: {
+        ...resolved,
+        promptOverride: verticalPrompt,
+      },
+      targetLocale: "fr",
+      contextLabel: "Dresses",
+      translatableFrontmatter: { title: "Virtual Try-On for Dresses" },
+      enBody,
+      slugStrategy: "fixed",
+    });
+
+    const bodyMarker = `## EN body (MDX)\n${enBody}`;
+    const splitAt = prompt.indexOf(bodyMarker) + bodyMarker.length;
+    const suffix = prompt.slice(splitAt);
+
+    assert.match(suffix, new RegExp(verticalPrompt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(suffix, /French \(fr\)/, "override must not drop the target locale");
+    assert.doesNotMatch(suffix, /slug MUST be written in French/, "fixed slug has no slug line");
+  });
+
   it("asks for body-only JSON when there is no translatable frontmatter", () => {
     // Mirrors buildGeminiResponseSchema: changelog-like types get a body-only
     // response schema, so the prompt must not ask for a frontmatter key.

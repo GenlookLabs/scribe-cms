@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.16 — 2026-07-06
+
+### Fixed
+
+- Always append the target locale to translation prompts, even when `translate.prompt` is set.
+
 ## 0.0.12 — 2026-06-17
 
 ### Fixed
