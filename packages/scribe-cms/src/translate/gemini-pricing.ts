@@ -26,20 +26,28 @@ export function resolveModelPricing(model: string): TieredModelPricing | undefin
   return match?.[1];
 }
 
+export type TranslationCostMode = "interactive" | "batch";
+
+/** Batch API tokens are billed at 50% of interactive rates. */
+const BATCH_DISCOUNT = 0.5;
+
 export function estimateTranslationCostUsd(
   model: string,
   inputTokens: number,
   outputTokens: number,
+  mode: TranslationCostMode = "interactive",
 ): number | undefined {
   const pricing = resolveModelPricing(model);
   if (!pricing) return undefined;
 
   const inputRate = tierRate(inputTokens, pricing.input);
   const outputRate = tierRate(outputTokens, pricing.output);
+  const multiplier = mode === "batch" ? BATCH_DISCOUNT : 1;
 
   return (
-    (inputTokens / 1_000_000) * inputRate +
-    (outputTokens / 1_000_000) * outputRate
+    ((inputTokens / 1_000_000) * inputRate +
+      (outputTokens / 1_000_000) * outputRate) *
+    multiplier
   );
 }
 

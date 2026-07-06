@@ -35,6 +35,9 @@ export function sanitizeMdxJsxAttributeQuotes(body: string): {
       const attrStart = i;
       while (i < body.length && /[\w:.-]/.test(body[i] ?? "")) i += 1;
       const attrName = body.slice(attrStart, i);
+      // Not an attribute name (e.g. `<locale,` in prose or a code fence):
+      // this is not a sanitizable tag — bail and copy the text through.
+      if (!attrName) break;
       while (i < body.length && /\s/.test(body[i] ?? "")) i += 1;
       if (body[i] !== "=") {
         tagOut += body.slice(attrStart, i);
@@ -44,11 +47,17 @@ export function sanitizeMdxJsxAttributeQuotes(body: string): {
       tagOut += body.slice(attrStart, i);
       tagOut += "=";
       i += 1;
+      // Preserve any whitespace between `=` and the value so that inputs we do
+      // not rewrite are copied through byte-for-byte.
+      const wsStart = i;
       while (i < body.length && /\s/.test(body[i] ?? "")) i += 1;
+      tagOut += body.slice(wsStart, i);
 
       const quote = body[i];
       if (quote !== '"' && quote !== "'") {
-        continue;
+        // Unquoted or expression value (`href={x}`) — nothing to sanitize;
+        // bail so the scan keeps making progress.
+        break;
       }
 
       if (quote === "'") {

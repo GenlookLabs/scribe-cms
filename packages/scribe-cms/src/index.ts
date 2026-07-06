@@ -53,8 +53,9 @@ export type { NextRedirectRule } from "./redirects/types.js";
 export type { RedirectSourceSlugs } from "./redirects/build-redirects.js";
 export { buildWorklist, resolveLocalesFromPreset } from "./translate/worklist.js";
 export type { TranslationWorklistStrategy, TranslationWorkItem, WorklistOptions } from "./translate/worklist.js";
-export { translatePage, translateWorklist } from "./translate/page-translator.js";
+export { resumeTranslationJobs, translatePage, translateWorklist } from "./translate/page-translator.js";
 export type {
+  TranslateMode,
   TranslatePageResult,
   TranslateProgressEvent,
   TranslateWorklistTotals,

@@ -1,5 +1,7 @@
 # Configuration
 
+> Rendered version: [scribe.genlook.app/docs/configuration](https://scribe.genlook.app/docs/configuration)
+
 Everything lives in one file, `scribe.config.ts`, exporting `defineConfig({...})`.
 Both the runtime (`createScribe`) and the CLI (which discovers
 `scribe.config.ts` in the working directory) read the same file.
@@ -25,6 +27,7 @@ export default defineConfig({
 | `rootDir` | — (required) | Project root. Keep it relative (usually `"."`): the CLI resolves it against the config file's directory, `createScribe` against `process.cwd()`. Don't build it from `import.meta.url` — bundlers inline that path at build time, which breaks on serverless hosts like Vercel. Relative `contentDir`/`store` resolve against it. |
 | `contentDir` | `"content"` | Directory containing one folder per content type. |
 | `store` | `".scribe/store.sqlite"` | SQLite translation store. **Commit it — do not gitignore `.scribe/`.** |
+| `assetsDir` | — | Static assets root (e.g. `"public"`). When set, `scribe validate` warns about image paths in frontmatter or bodies that don't exist on disk. |
 | `locales` | — (required) | All locales, including the default one. |
 | `defaultLocale` | `"en"` | Canonical source locale. Must appear in `locales`. |
 | `localeRouting` | `{ strategy: "path-prefix", prefixDefaultLocale: false }` | How locale markers appear in generated URLs. `path-prefix` prepends `/{locale}` (omit for default locale when `prefixDefaultLocale` is false). `search-param` appends `?{param}={locale}` for non-default locales. |

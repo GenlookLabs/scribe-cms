@@ -1,5 +1,7 @@
 # Translation
 
+> Rendered version: [scribe.genlook.app/docs/translation](https://scribe.genlook.app/docs/translation)
+
 Scribe translates the English source into every other locale with an LLM
 (Gemini), and stores the results in SQLite. You never edit locale files —
 you edit English, re-run `scribe translate`, and commit the store.
@@ -40,10 +42,29 @@ scribe translate --type blog      # one content type
 scribe translate --slug my-post   # one document
 scribe translate --dry-run        # show the worklist, write nothing
 scribe translate --force          # re-translate even when hashes match
-scribe translate --model gemini-2.5-pro
+scribe translate --strategy missing-only   # skip stale, only fill gaps
+scribe translate --concurrency 5  # parallel requests (default 3)
+scribe translate --model gemini-3.1-pro
 ```
 
+Run in a terminal, `scribe translate` shows a live progress UI with per-item
+status, running token counts, and an estimated cost in USD. Pass
+`--no-progress` (or run non-interactively, e.g. in CI) for plain line-by-line
+logging. Without flags in a TTY, it interactively asks for content type,
+locale preset, and strategy.
+
 Then commit `.scribe/store.sqlite`.
+
+## Output validation
+
+A translation is only persisted if it survives two checks:
+
+1. The returned MDX body must parse (after normalizing escape artifacts and
+   JSX attribute quoting the model sometimes gets wrong).
+2. The returned frontmatter must re-validate against your full Zod schema.
+
+A failing item fails the command with a non-zero exit code — bad model output
+never reaches the store, so it can never reach production.
 
 ## Steering the translator
 
@@ -75,21 +96,22 @@ export default defineConfig({
 | `context`                | project + type  | Brand/domain context prepended to every request (project and type contexts are concatenated).                    |
 | `rules`                  | project + type  | Extra rules appended to the defaults.                                                                            |
 | `prompt`                 | project or type | Replace the default system prompt entirely.                                                                      |
-| `defaultModel` / `model` | project / type  | Gemini model id. Default: `gemini-2.5-pro` (also overridable via the `PROSE_GEMINI_MODEL` env var or `--model`). |
+| `defaultModel` / `model` | project / type  | Gemini model id. Default: `gemini-3.1-pro` (also overridable via the `PROSE_GEMINI_MODEL` env var or `--model`). |
 
 Built-in rules (always applied) include: do not translate brand names unless they have a well-known local name in the target market, return MDX bodies with real line breaks (not `\\n` escapes), and fix JSX attribute quoting when values contain `"`.
 
 ## Reviewing translations
 
 ```bash
-scribe history blog my-post fr    # revision timeline for one page
+scribe history blog my-post fr    # EN snapshot timeline for one page
 scribe studio                     # read-only web UI on :3600
 ```
 
-The studio shows per-locale coverage, the current missing/stale worklist, and
-revision history. Every translation and detected English edit is recorded in
-a `revisions` table inside the store, so you can audit when and with which
-model a page was translated.
+Every translation links to a snapshot of the English source it was made from
+(stored in the same SQLite file), so you can audit when, from what, and with
+which model a page was translated. `scribe history` prints that timeline; the
+studio shows per-locale coverage, the current missing/stale worklist, and
+per-document detail with the snapshot alongside the stored translation.
 
 ## Locale presets
 
@@ -113,10 +135,11 @@ scribe translate --preset ultraLight
 | ------------------------------------------ | ------------------------------------------------------------------------------- |
 | `scribe status`                            | English doc counts + per-locale translation counts.                             |
 | `scribe version`                           | Print installed scribe-cms version.                                           |
-| `scribe validate`                          | Schemas, relations, redirects, slugs, assets. Non-zero exit on errors. |
+| `scribe validate`                          | Schemas, MDX bodies, relations, redirects, slugs, assets. Non-zero exit on errors. |
 | `scribe translate [flags]`                 | Translate missing/stale pages. Flags above.                                     |
-| `scribe history <type> <en-slug> [locale]` | Revision timeline.                                                              |
+| `scribe history <type> <en-slug> [locale]` | EN snapshot timeline for one document.                                          |
 | `scribe studio [--port 3600]`              | Local read-only admin UI.                                                       |
+| `scribe export-static [flags]`             | Write raw MDX files for static hosting (`--out`, `--extension`, `--type`, `--locale`). |
 
 All commands accept `--config <path>` (default: `scribe.config.ts` in the
 working directory).

@@ -1,15 +1,20 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, type GenerateContentConfig, type GenerateContentResponse } from "@google/genai";
 import {
   DEFAULT_GEMINI_MODEL,
   normalizeGeminiDisplayName,
   resolveGeminiModelId,
+  resolveThinkingConfig,
 } from "./gemini-models.js";
+import { withRetry } from "./retry.js";
 
 const DEFAULT_MODEL = DEFAULT_GEMINI_MODEL;
 
 export interface GeminiTokenUsage {
   inputTokens: number;
+  /** Billed output tokens; INCLUDES thoughts tokens. */
   outputTokens: number;
+  /** Thoughts (reasoning) tokens, billed as output. */
+  thoughtsTokens: number;
   totalTokens: number;
 }
 
@@ -51,6 +56,36 @@ export function parseGeminiResponse(text: string): {
   }
 }
 
+/**
+ * Build the per-request generation config shared by the direct and batch paths.
+ * The same shape is passed to `generateContent` and to each inlined batch request.
+ */
+export function buildGeminiRequestConfig(input: {
+  apiModelId: string;
+  responseSchema?: Record<string, unknown>;
+}): GenerateContentConfig {
+  const thinkingConfig = resolveThinkingConfig(input.apiModelId);
+  return {
+    responseMimeType: "application/json",
+    ...(input.responseSchema ? { responseSchema: input.responseSchema } : {}),
+    ...(thinkingConfig ? { thinkingConfig } : {}),
+  };
+}
+
+/** Extract token usage from a Gemini response; thoughts are folded into output. */
+export function usageFromResponse(response: GenerateContentResponse): GeminiTokenUsage {
+  const usageMetadata = response.usageMetadata;
+  const thoughtsTokens = usageMetadata?.thoughtsTokenCount ?? 0;
+  return {
+    inputTokens: usageMetadata?.promptTokenCount ?? 0,
+    // candidatesTokenCount does not include thoughts, but thoughts are billed as
+    // output tokens, so fold them in here for accurate cost accounting.
+    outputTokens: (usageMetadata?.candidatesTokenCount ?? 0) + thoughtsTokens,
+    thoughtsTokens,
+    totalTokens: usageMetadata?.totalTokenCount ?? 0,
+  };
+}
+
 export async function translatePageWithGemini(input: {
   prompt: string;
   model?: string;
@@ -67,14 +102,16 @@ export async function translatePageWithGemini(input: {
   );
   const apiModel = resolveGeminiModelId(displayModel);
   const ai = new GoogleGenAI({ apiKey });
-  const response = await ai.models.generateContent({
-    model: apiModel,
-    contents: input.prompt,
-    config: {
-      responseMimeType: "application/json",
-      ...(input.responseSchema ? { responseSchema: input.responseSchema } : {}),
-    },
-  });
+  const response = await withRetry(() =>
+    ai.models.generateContent({
+      model: apiModel,
+      contents: input.prompt,
+      config: buildGeminiRequestConfig({
+        apiModelId: apiModel,
+        responseSchema: input.responseSchema,
+      }),
+    }),
+  );
 
   const raw = response.text ?? "";
   const parsed = parseGeminiResponse(raw);
@@ -83,12 +120,5 @@ export async function translatePageWithGemini(input: {
     throw new Error("Gemini response missing frontmatter/body");
   }
 
-  const usageMetadata = response.usageMetadata;
-  const usage: GeminiTokenUsage = {
-    inputTokens: usageMetadata?.promptTokenCount ?? 0,
-    outputTokens: usageMetadata?.candidatesTokenCount ?? 0,
-    totalTokens: usageMetadata?.totalTokenCount ?? 0,
-  };
-
-  return { model: displayModel, raw, parsed, usage };
+  return { model: displayModel, raw, parsed, usage: usageFromResponse(response) };
 }

@@ -31,4 +31,46 @@ describe("sanitizeMdxJsxAttributeQuotes", () => {
     assert.equal(adjusted, false);
     assert.equal(body, input);
   });
+
+  it("terminates on generic-type text like Map<locale, ...> (regression: infinite loop)", () => {
+    const input = "`load()` returns the raw `Map<locale, { bySlug, byEnSlug }>` index.";
+    const { body, adjusted } = sanitizeMdxJsxAttributeQuotes(input);
+    assert.equal(adjusted, false);
+    assert.equal(body, input);
+  });
+
+  it("terminates on expression attribute values (regression: infinite loop)", () => {
+    const input = '<Image src={hero} alt="Cover" />';
+    const { body, adjusted } = sanitizeMdxJsxAttributeQuotes(input);
+    assert.equal(adjusted, false);
+    assert.equal(body, input);
+  });
+
+  it("preserves whitespace between '=' and an expression value (regression: dropped spaces)", () => {
+    const input = "<Comp attr= {x} />";
+    const { body, adjusted } = sanitizeMdxJsxAttributeQuotes(input);
+    assert.equal(adjusted, false);
+    assert.equal(body, input);
+  });
+
+  it("preserves whitespace between '=' and an unquoted value", () => {
+    const input = "<a href= foo>";
+    const { body, adjusted } = sanitizeMdxJsxAttributeQuotes(input);
+    assert.equal(adjusted, false);
+    assert.equal(body, input);
+  });
+
+  it("rewrites gereshayim when the broken attribute follows a boolean attribute", () => {
+    const input = '<FaqItem open question="דוא"ל?">';
+    const { body, adjusted } = sanitizeMdxJsxAttributeQuotes(input);
+    assert.equal(adjusted, true);
+    assert.equal(body, '<FaqItem open question=\'דוא"ל?\'>');
+  });
+
+  it("rewrites gereshayim when the broken attribute follows another quoted attribute", () => {
+    const input = '<FaqItem lang="he" question="דוא"ל?">';
+    const { body, adjusted } = sanitizeMdxJsxAttributeQuotes(input);
+    assert.equal(adjusted, true);
+    assert.equal(body, '<FaqItem lang="he" question=\'דוא"ל?\'>');
+  });
 });

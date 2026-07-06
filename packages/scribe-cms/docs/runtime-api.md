@@ -1,5 +1,7 @@
 # Runtime API
 
+> Rendered version: [scribe.genlook.app/docs/runtime-api](https://scribe.genlook.app/docs/runtime-api)
+
 ```ts
 import { createScribe } from "scribe-cms/runtime";
 import config from "./scribe.config";
@@ -49,8 +51,8 @@ Returns `[]` for a locale with no documents.
 
 ### `get(slug, locale?)`
 
-Exact slug lookup in one locale. No fallback, no alias handling. Returns the
-document or `null`.
+Exact slug lookup in one locale. No fallback, no redirect handling. Returns
+the document or `null`.
 
 ### `resolve(slug, locale)`
 
@@ -175,6 +177,23 @@ routable types; skips `noindex` and redirect source slugs from `_redirects.json`
 Options: `baseUrl` (required), `contentTypes`, `typeDefaults`, `resolveUrl`,
 `resolvePathname`, `excludeNoindex` (default true), `includeXDefault`
 (default true).
+
+## Introspection
+
+Beyond the per-type accessors, the client exposes the resolved config:
+
+```ts
+scribe.config;              // resolved ScribeConfig
+scribe.getType("blog");     // one resolved content type
+scribe.listTypes();         // all content types
+scribe.listRoutableTypes(); // only types with a path template
+```
+
+Useful for generic tooling — e.g. iterating every routable type to build
+navigation or feeds. The programmatic counterparts of the CLI also ship on the
+main entry (`generateSitemap`, `translateWorklist`/`translatePage`,
+`serializeMdx`, `findConfigPath`/`resolveConfig`) for build scripts that need
+more control than the commands offer.
 
 ## Redirects
 

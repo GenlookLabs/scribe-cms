@@ -1,5 +1,7 @@
 # Writing content
 
+> Rendered version: [scribe.genlook.app/docs/content-model](https://scribe.genlook.app/docs/content-model)
+
 ## Files
 
 One document = one `.mdx` (or `.md`) file in the type's folder:
@@ -41,8 +43,8 @@ to fail validation.
 ## Built-in frontmatter fields
 
 These are available on **every** content type without declaring them in the
-schema (declaring them yourself is an error — they are extracted before your
-schema runs):
+schema — they are extracted from the frontmatter before your schema runs, so
+declaring them in your Zod schema has no effect:
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -104,8 +106,10 @@ scribe validate
 ```
 
 Checks, per English file: schema parse, built-in field shapes, your
-`crossValidate` hook, relation integrity (dangling required relation = error,
-dangling optional relation = warning), `_redirects.json` rules, localized-slug
-suffix rules, and missing image assets when `assetsDir` is set.
+`crossValidate` hook, **MDX compilation of the body** (English sources and
+stored translations alike — a body that doesn't parse as MDX is an error),
+relation integrity (dangling required relation = error, dangling optional
+relation = warning), `_redirects.json` rules, localized-slug suffix rules, and
+missing image assets when `assetsDir` is set.
 
 Exit code is non-zero when any error is found — run it before your build.

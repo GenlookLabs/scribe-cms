@@ -84,6 +84,19 @@ export function createTranslateProgressReporter(options: {
   if (!enabled) {
     return {
       onEvent(event) {
+        if (event.type === "batch-submitted") {
+          const verb = event.resumed ? "Resuming" : "Submitted";
+          console.log(
+            `${verb} batch job ${event.jobIndex + 1}/${event.jobCount} with ${event.count} request${event.count === 1 ? "" : "s"}${event.model ? ` (${event.model})` : ""}: ${event.name}`,
+          );
+          return;
+        }
+        if (event.type === "batch-polling") {
+          console.log(
+            `batch ${event.jobIndex + 1}/${event.jobCount} ${event.name}: ${event.state.replace(/^JOB_STATE_/, "")} (${Math.round(event.elapsedMs / 1000)}s elapsed)`,
+          );
+          return;
+        }
         if (event.type === "item-done") {
           const label = labelForResult(event.result);
           const status = statusForResult(event.result, dryRun);
@@ -114,6 +127,9 @@ export function createTranslateProgressReporter(options: {
   let outputTokens = 0;
   let estimatedCostUsd = 0;
   let active: string[] = [];
+  let mode: "batch" | "direct" | undefined;
+  const batchJobs = new Map<string, { state: string; count: number }>();
+  let batchElapsedMs = 0;
   const recent: TranslatePageResult[] = [];
   let renderedLines = 0;
   let cursorHidden = false;
@@ -140,7 +156,12 @@ export function createTranslateProgressReporter(options: {
 
     const lines: string[] = [];
     const title = dryRun ? "Dry run" : "Translating";
-    lines.push(cyan(`${title} ${done}/${total}`) + dim(` · ${concurrency} parallel`) + (model ? dim(` · ${model}`) : ""));
+    const isBatch = mode === "batch" || batchJobs.size > 0;
+    lines.push(
+      cyan(`${title} ${done}/${total}`) +
+        dim(isBatch ? " · batch" : ` · ${concurrency} parallel`) +
+        (model ? dim(` · ${model}`) : ""),
+    );
     lines.push(progressBar(total === 0 ? 0 : done / total) + dim(`  ${Math.round(total === 0 ? 0 : (done / total) * 100)}%`));
     lines.push(
       dim("Tokens ") +
@@ -150,7 +171,22 @@ export function createTranslateProgressReporter(options: {
         dim(" est."),
     );
 
-    if (active.length > 0) {
+    if (batchJobs.size > 0 && done < total) {
+      const terminal = /^(SUCCEEDED|FAILED|CANCELLED|EXPIRED|PARTIALLY_SUCCEEDED)$/;
+      let running = 0;
+      let finished = 0;
+      let requests = 0;
+      for (const job of batchJobs.values()) {
+        if (terminal.test(job.state)) finished += 1;
+        else running += 1;
+        requests += job.count;
+      }
+      lines.push(
+        dim("Batches ") +
+          `${running} running · ${finished} done` +
+          dim(` · ${requests} request${requests === 1 ? "" : "s"} · ${Math.round(batchElapsedMs / 1000)}s elapsed`),
+      );
+    } else if (active.length > 0) {
       lines.push(dim("Active ") + active.slice(0, 3).join(", ") + (active.length > 3 ? dim(` +${active.length - 3}`) : ""));
     } else if (done < total) {
       lines.push(dim("Active ") + "starting…");
@@ -181,12 +217,27 @@ export function createTranslateProgressReporter(options: {
           total = event.total;
           concurrency = event.concurrency;
           model = event.model;
+          mode = event.mode;
           render();
           break;
         case "item-start":
           active = event.active;
           render();
           break;
+        case "batch-submitted":
+          batchJobs.set(event.name, { state: "SUBMITTED", count: event.count });
+          render();
+          break;
+        case "batch-polling": {
+          const job = batchJobs.get(event.name);
+          batchJobs.set(event.name, {
+            state: event.state.replace(/^JOB_STATE_/, ""),
+            count: job?.count ?? 0,
+          });
+          batchElapsedMs = Math.max(batchElapsedMs, event.elapsedMs);
+          render();
+          break;
+        }
         case "item-done": {
           done += 1;
           active = active.filter((label) => label !== labelForResult(event.result));

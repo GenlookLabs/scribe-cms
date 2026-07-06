@@ -2,6 +2,7 @@ import { CancelPromptError } from "@inquirer/core";
 import { checkbox, select } from "@inquirer/prompts";
 import type { ScribeConfig } from "../src/core/types.js";
 
+import type { TranslateMode } from "../src/translate/page-translator.js";
 import type { TranslationWorklistStrategy } from "../src/translate/worklist.js";
 
 export interface TranslateSelection {
@@ -9,6 +10,7 @@ export interface TranslateSelection {
   preset?: string;
   locale?: string[];
   strategy?: TranslationWorklistStrategy;
+  mode?: TranslateMode;
 }
 
 function isInteractive(): boolean {
@@ -40,38 +42,50 @@ async function promptContentType(config: ScribeConfig): Promise<string | undefin
   );
 }
 
+/** Sentinel select values that are not preset names. */
+const ALL_LOCALES = Symbol("all-locales");
+const PICK_LOCALES = Symbol("pick-locales");
+
+async function promptManualLocales(config: ScribeConfig): Promise<Pick<TranslateSelection, "locale">> {
+  const locales = nonDefaultLocales(config);
+  if (locales.length <= 1) return {};
+
+  const picked = await runPrompt(
+    checkbox({
+      message: "Locales to translate",
+      choices: locales.map((locale) => ({ name: locale, value: locale, checked: true })),
+      validate: (values) => values.length > 0 || "Pick at least one locale",
+    }),
+  );
+  return picked.length === locales.length ? {} : { locale: picked };
+}
+
 async function promptLocalePreset(config: ScribeConfig): Promise<Pick<TranslateSelection, "preset" | "locale">> {
   const presets = Object.entries(config.localePresets ?? {}).filter(
     (entry): entry is [string, string[]] => Array.isArray(entry[1]),
   );
 
   if (presets.length === 0) {
-    const locales = nonDefaultLocales(config);
-    if (locales.length <= 1) return {};
-
-    const picked = await runPrompt(
-      checkbox({
-        message: "Locales to translate",
-        choices: locales.map((locale) => ({ name: locale, value: locale, checked: true })),
-        validate: (values) => values.length > 0 || "Pick at least one locale",
-      }),
-    );
-    return picked.length === locales.length ? {} : { locale: picked };
+    return promptManualLocales(config);
   }
 
   const choice = await runPrompt(
-    select<string | undefined>({
+    select<string | typeof ALL_LOCALES | typeof PICK_LOCALES>({
       message: "Locale preset",
       choices: [
-        { name: "All locales", value: undefined },
+        { name: "All locales", value: ALL_LOCALES },
         ...presets.map(([name, locales]) => ({
           name: `${name} (${locales.join(", ")})`,
           value: name,
         })),
+        { name: "Choose locales manually…", value: PICK_LOCALES },
       ],
     }),
   );
-  return choice ? { preset: choice } : {};
+
+  if (choice === PICK_LOCALES) return promptManualLocales(config);
+  if (choice === ALL_LOCALES) return {};
+  return { preset: choice };
 }
 
 async function promptStrategy(): Promise<TranslationWorklistStrategy> {
@@ -87,6 +101,19 @@ async function promptStrategy(): Promise<TranslationWorklistStrategy> {
   );
 }
 
+async function promptMode(): Promise<TranslateMode> {
+  return runPrompt(
+    select<TranslateMode>({
+      message: "Translation mode",
+      choices: [
+        { name: "Batch — 50% cheaper, async, resumable (recommended)", value: "batch" },
+        { name: "Direct — immediate results, full price", value: "direct" },
+      ],
+      default: "batch",
+    }),
+  );
+}
+
 /** Prompt for content type and locale preset when flags are omitted in a TTY. */
 export async function promptTranslateSelection(
   config: ScribeConfig,
@@ -95,6 +122,7 @@ export async function promptTranslateSelection(
     preset?: string;
     locale?: string[];
     strategy?: TranslationWorklistStrategy;
+    mode?: TranslateMode;
   },
 ): Promise<TranslateSelection> {
   const selection: TranslateSelection = {
@@ -102,6 +130,7 @@ export async function promptTranslateSelection(
     preset: flags.preset,
     locale: flags.locale,
     strategy: flags.strategy,
+    mode: flags.mode,
   };
 
   if (!isInteractive()) return selection;
@@ -116,6 +145,10 @@ export async function promptTranslateSelection(
 
   if (!selection.strategy) {
     selection.strategy = await promptStrategy();
+  }
+
+  if (!selection.mode) {
+    selection.mode = await promptMode();
   }
 
   return selection;

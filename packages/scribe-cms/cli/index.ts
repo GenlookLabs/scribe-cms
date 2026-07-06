@@ -2,6 +2,7 @@
 import {
   createProject,
   loadConfigSync,
+  resumeTranslationJobs,
   translateWorklist,
   validateProject,
   writeStaticRawExports,
@@ -28,6 +29,9 @@ interface CliOptions {
   concurrency?: number;
   noProgress?: boolean;
   strategy?: TranslationWorklistStrategy;
+  batch?: boolean;
+  direct?: boolean;
+  resume?: boolean;
   out?: string;
   extension?: string;
 }
@@ -94,6 +98,21 @@ function parseArgs(argv: string[]): { command: string; options: CliOptions; rest
     }
     if (arg === "--no-progress") {
       options.noProgress = true;
+      i++;
+      continue;
+    }
+    if (arg === "--batch") {
+      options.batch = true;
+      i++;
+      continue;
+    }
+    if (arg === "--direct") {
+      options.direct = true;
+      i++;
+      continue;
+    }
+    if (arg === "--resume") {
+      options.resume = true;
       i++;
       continue;
     }
@@ -169,11 +188,19 @@ Translate flags:
   --locale <code>...     Target locale(s); overrides --preset
   --slug <en-slug>       Single English document
   --model <id>           Gemini model override
-  --concurrency <n>      Parallel translations (default: 3)
+  --batch                Force Gemini Batch API mode (50% token cost; default)
+  --direct               Force direct interactive calls (immediate, full price)
+  --resume               Only poll/ingest pending batch jobs; submit nothing new
+  --concurrency <n>      Parallel translations in --direct mode (default: 3)
   --dry-run              List work without writing
   --force                Re-translate even when hashes match
   --strategy <mode>      all (default) or missing-only
   --no-progress          Plain line logging instead of live progress
+
+Batch mode submits jobs upfront and persists them in the store, so Ctrl+C
+during polling is safe: the next run (or --resume) picks the jobs back up and
+ingests their results. In a TTY without --batch/--direct, a prompt asks which
+mode to use.
 `);
     return;
   }
@@ -222,11 +249,31 @@ Translate flags:
       break;
     }
     case "translate": {
+      if (options.batch && options.direct) {
+        throw new Error("--batch and --direct are mutually exclusive");
+      }
+
+      if (options.resume) {
+        const reporter = createTranslateProgressReporter({
+          enabled: !options.noProgress,
+          dryRun: false,
+        });
+        const results = await resumeTranslationJobs(config, { onProgress: reporter.onEvent });
+        reporter.finish();
+        if (results === null) {
+          console.log("No pending translation batch jobs.");
+          break;
+        }
+        if (results.some((result) => result.failed)) process.exitCode = 1;
+        break;
+      }
+
       const selection = await promptTranslateSelection(config, {
         type: options.type,
         preset: options.preset,
         locale: options.locale,
         strategy: options.strategy,
+        mode: options.batch ? "batch" : options.direct ? "direct" : undefined,
       });
       const locales = resolveLocalesFromPreset(config, selection.preset, selection.locale);
       const worklist = buildWorklist(config, {
@@ -236,6 +283,19 @@ Translate flags:
         strategy: selection.strategy ?? "all",
       });
       if (worklist.length === 0) {
+        // Still pick up pending batch jobs from an interrupted previous run.
+        if (!options.dryRun) {
+          const reporter = createTranslateProgressReporter({
+            enabled: !options.noProgress,
+            dryRun: false,
+          });
+          const resumed = await resumeTranslationJobs(config, { onProgress: reporter.onEvent });
+          reporter.finish();
+          if (resumed !== null) {
+            if (resumed.some((result) => result.failed)) process.exitCode = 1;
+            break;
+          }
+        }
         console.log("Nothing to translate.");
         break;
       }
@@ -250,6 +310,7 @@ Translate flags:
         dryRun: options.dryRun,
         force: options.force,
         concurrency: options.concurrency,
+        mode: selection.mode,
         onProgress: reporter.onEvent,
       });
       reporter.finish();

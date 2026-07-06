@@ -3,7 +3,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import type { ScribeConfig } from "../core/types.js";
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 const MIGRATIONS: string[] = [
   `CREATE TABLE IF NOT EXISTS meta (
@@ -53,6 +53,29 @@ const MIGRATIONS: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_en_snapshots_lookup
     ON en_snapshots(content_type, en_slug, created_at DESC)`,
+  `CREATE TABLE IF NOT EXISTS translation_batch_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_name TEXT NOT NULL UNIQUE,
+    model TEXT NOT NULL,
+    display_model TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    state TEXT NOT NULL,
+    completed_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS translation_batch_items (
+    job_id INTEGER NOT NULL,
+    request_index INTEGER NOT NULL,
+    content_type TEXT NOT NULL,
+    en_slug TEXT NOT NULL,
+    locale TEXT NOT NULL,
+    en_hash TEXT NOT NULL,
+    snapshot_id INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    error TEXT,
+    PRIMARY KEY (job_id, request_index)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_batch_items_status
+    ON translation_batch_items(status)`,
 ];
 
 export type SqliteMode = "readonly" | "readwrite";
@@ -88,6 +111,10 @@ function addColumnIfMissing(
 }
 
 function readSchemaVersion(db: Database.Database): number {
+  const metaTable = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'meta'`)
+    .get();
+  if (!metaTable) return 0;
   const row = db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get() as
     | { value: string }
     | undefined;

@@ -1,5 +1,7 @@
 # Getting started
 
+> Rendered version: [scribe.genlook.app/docs/getting-started](https://scribe.genlook.app/docs/getting-started)
+
 ## Install
 
 ```bash

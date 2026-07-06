@@ -4,7 +4,7 @@ Typed, file-based CMS for multilingual MDX. English source files on disk, locale
 
 Scribe has no framework dependency — it reads files and SQLite in-process and works with any Node-based stack (Next.js, Astro, Remix, SvelteKit, a static-site script, …). Examples in these docs use Next.js, but nothing about Scribe is Next-specific.
 
-**Docs:** [Getting started](./docs/getting-started.md) · [Configuration](./docs/configuration.md) · [Writing content](./docs/content.md) · [Runtime API](./docs/runtime-api.md) · [Translation](./docs/translation.md)
+**Docs:** [scribe.genlook.app/docs](https://scribe.genlook.app/docs) · [Getting started](./docs/getting-started.md) · [Configuration](./docs/configuration.md) · [Writing content](./docs/content.md) · [Runtime API](./docs/runtime-api.md) · [Translation](./docs/translation.md)
 
 ## Install
 
@@ -105,12 +105,19 @@ are inferred from the config — no codegen.
 
 ```bash
 scribe status                  # EN docs + translation coverage
-scribe validate                # schemas, relations, redirects, sqlite consistency
+scribe validate                # schemas, MDX bodies, relations, redirects, sqlite consistency
 scribe translate --locale fr   # translate stale/missing pages (Gemini)
-scribe translate --preset active
-scribe history blog my-post fr # revision timeline
+scribe translate --preset active --strategy missing-only --concurrency 5
+scribe translate --dry-run     # show the worklist without calling the API
+scribe history blog my-post fr # EN snapshot timeline for one document
 scribe studio                  # read-only local admin UI
+scribe export-static           # raw MDX files for static hosting / crawlers
 ```
+
+Translated output is checked before it is stored: the returned MDX body must
+parse and the frontmatter must re-validate against your Zod schema, so a bad
+model response fails the command instead of reaching production. Interactive
+runs show live progress with token counts and an estimated cost in USD.
 
 Translations are stored in `.scribe/store.sqlite` keyed by a hash of the EN
 translatable content, so `scribe translate` only re-translates what changed.
