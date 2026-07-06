@@ -12,12 +12,13 @@ export function LanguageSwitcher() {
   const router = useRouter();
 
   return (
-    <label className="language-switcher">
+    <label>
       <span className="sr-only">{t("languageLabel")}</span>
       <select
         value={currentLocale}
         onChange={(event) => router.replace(pathname, { locale: event.target.value })}
         aria-label={t("languageLabel")}
+        className="appearance-none rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-sm text-neutral-900"
       >
         {routing.locales.map((locale) => (
           <option key={locale} value={locale}>

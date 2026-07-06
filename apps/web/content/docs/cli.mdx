@@ -1,0 +1,69 @@
+---
+title: "CLI reference"
+description: "Every scribe command and flag: status, validate, translate, history, studio, export-static."
+order: 6
+---
+
+The `scribe` binary ships with the package and is on your PATH after install. All commands accept `--config <path>` (default: `scribe.config.ts` found in the working directory) and read `.env` then `.env.local` before running (existing environment variables win).
+
+```bash
+scribe status
+scribe validate
+scribe translate [flags]
+scribe history <type> <en-slug> [locale]
+scribe studio [--port 3600]
+scribe export-static [flags]
+scribe version
+```
+
+## `scribe status`
+
+Per content type: English document count, then translation count per locale, plus the store path. Quick coverage overview.
+
+## `scribe validate`
+
+Validates the whole project — schemas, built-in fields, `crossValidate` hooks, MDX compilation of English bodies and stored translations, relations, `_redirects.json` rules, localized-slug suffixes, and missing image assets when `assetsDir` is set. Prints one line per issue and exits non-zero on errors, so it can gate your build. See [content model](/docs/content-model) for the full list of checks.
+
+## `scribe translate`
+
+Translates missing and stale pages with Gemini (needs `GEMINI_API_KEY`). Run without flags in a terminal, it interactively asks for content type, locale preset, and strategy. In scripts, pass flags:
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--type <id>` | all types | One content type. |
+| `--locale <code>...` | all non-default locales | Target locales (space-separated). Overrides `--preset`. |
+| `--preset <name>` | — | A `localePresets` group from the config. |
+| `--slug <en-slug>` | — | One English document. |
+| `--strategy <all\|missing-only>` | `all` | `all` = stale + missing; `missing-only` skips stale re-translation. |
+| `--concurrency <n>` | `3` | Parallel translation requests. |
+| `--model <id>` | `gemini-3.1-pro` | Gemini model override. |
+| `--dry-run` | — | Print the worklist without calling the API or writing. |
+| `--force` | — | Re-translate even when the English hash matches. |
+| `--no-progress` | — | Plain line-by-line logs instead of the live progress UI. |
+
+Interactive runs show a live progress bar with per-item status, running input/output token counts, and an estimated cost in USD. The command exits non-zero if any item failed. Details in [translation](/docs/translation).
+
+## `scribe history <type> <en-slug> [locale]`
+
+The English snapshot timeline for one document: when each snapshot was captured, its content hash, and which locale translations were made from it. Pass a locale to filter.
+
+## `scribe studio`
+
+A local, read-only web UI (default `http://127.0.0.1:3600`, change with `--port`). Shows per-type and per-locale translation coverage, the current missing/stale worklist, and per-document detail: frontmatter with translatable/structural markers, the stored translation, its metadata (model, date, hash), and the English snapshot it was made from. It never writes — editing stays in your editor and git.
+
+## `scribe export-static`
+
+Writes raw MDX files (frontmatter + body, per locale) into a static directory — useful for serving crawler/LLM-friendly plain-text versions of your pages:
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--out <dir>` | `public` | Output directory. |
+| `--extension <ext>` | `mdx` | File extension for exported files. |
+| `--type <id,id>` | all routable types | Comma-separated content types. |
+| `--locale <code>...` | all locales | Locales to export. |
+
+Managed output roots are cleaned before writing. Documents that are redirect sources in `_redirects.json` are skipped.
+
+## `scribe version`
+
+Prints the installed scribe-cms version (also `--version` / `-V`).

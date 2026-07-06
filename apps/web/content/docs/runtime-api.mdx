@@ -1,0 +1,245 @@
+---
+title: "Runtime API"
+description: "createScribe and the full typed client surface: reading, routing helpers, relations, sitemap, redirects, and framework integration."
+order: 5
+---
+
+```ts
+import { createScribe } from "scribe-cms/runtime";
+import config from "./scribe.config";
+
+const scribe = createScribe(config);
+```
+
+`createScribe()` returns a typed client with one accessor per content type (`scribe.blog`, `scribe.author`, …) plus `scribe.sitemap()`. All reads are synchronous and in-memory: content is loaded once, cached, and (in development) revalidated when files or the translation store change.
+
+The client is plain Node — no framework dependency. It works the same in Next.js, Astro, Remix, SvelteKit, or a build script; the page examples below use Next.js conventions purely as illustrations.
+
+Documents have this shape — `frontmatter` is typed from your Zod schema:
+
+```ts
+{
+  slug: string;        // slug in this document's locale
+  enSlug: string;      // English parent slug (== slug for EN docs)
+  locale: string;
+  frontmatter: { ... };
+  content: string;     // raw MDX body
+  publishedAt?: string;
+  updatedAt?: string;
+  noindex: boolean;
+}
+```
+
+## Reading
+
+### `list(locale?, options?)`
+
+All documents for a locale (default: the default locale), sorted by the type's `orderBy`.
+
+```ts
+scribe.blog.list("fr");
+scribe.blog.list("fr", { limit: 3 });
+scribe.blog.list("fr", { orderBy: "slug" });   // per-call override
+```
+
+Returns `[]` for a locale with no documents.
+
+### `get(slug, locale?)`
+
+Exact slug lookup in one locale. No fallback, no redirect handling. Returns the document or `null`.
+
+### `resolve(slug, locale)`
+
+The full request-path resolution — use this in pages:
+
+```ts
+const r = scribe.blog.resolve(slug, locale);
+// {
+//   document: BlogDoc | null,
+//   actualLocale: string,        // "en" when EN fallback kicked in
+//   shouldRedirectTo?: string,   // 301 target (wrong-locale slug correction)
+//   canonicalPath?: string,      // locale-aware pathname for the document
+// }
+```
+
+Handles, in order: direct hit → wrong-locale slug redirect → English fallback (when `indexFallback: "en"`). Slug migrations and retired documents are handled by `_redirects.json` rules in your proxy/static redirect map, not by `resolve()`. A typical page handler (Next.js shown):
+
+```ts
+const resolved = scribe.blog.resolve(slug, locale);
+if (resolved.shouldRedirectTo) permanentRedirect(resolved.shouldRedirectTo);
+if (!resolved.document) notFound();
+```
+
+## Routing helpers
+
+### `staticParams(options?)`
+
+Every `{ locale, slug }` pair to prerender — drop it into your framework's static-paths hook (Next.js `generateStaticParams`, Astro `getStaticPaths`, SvelteKit `entries`, …):
+
+```ts
+export function generateStaticParams() {
+  return scribe.blog.staticParams();
+}
+
+// Restrict locales (e.g. an OG-image route that only supports Latin scripts):
+scribe.blog.staticParams({ locales: ["en", "fr", "de"] });
+```
+
+Untranslated pages fall back to the English slug so the EN-fallback page is still prerendered.
+
+### `alternates(doc)`
+
+The hreflang map for a document: locale → relative path, for every locale that has a translation (the default locale is always included):
+
+```ts
+scribe.blog.alternates(doc);
+// { en: "/blog/hello-world", fr: "/fr/blog/bonjour-le-monde" }
+```
+
+Feed it to your hreflang tags — e.g. Next.js `metadata.alternates.languages` or hand-rendered link elements.
+
+### `translation(doc, targetLocale)`
+
+The same document in another locale, or `null` if untranslated. Callers usually fall back to the document they already have:
+
+```ts
+const frDoc = scribe.blog.translation(doc, "fr") ?? doc;
+```
+
+### `url(slug, locale)`
+
+Builds a pathname from the type's `path` template:
+
+```ts
+scribe.blog.url("hello-world", "fr");  // "/fr/blog/hello-world"
+```
+
+`staticParams`, `alternates`, and `url` throw for reference-only types (no `path`).
+
+## Relations
+
+### `related(doc, field, locale?)`
+
+Dereferences a `field.relation()` frontmatter field into the target type's document(s). The return type is inferred from the schema:
+
+```ts
+scribe.blog.related(doc, "author");        // AuthorDoc           (required single)
+scribe.vertical.related(doc, "blogSlug");  // BlogDoc | null      (optional single)
+scribe.glossary.related(doc, "terms");     // GlossaryDoc[]       (multiple)
+```
+
+- Dereferences in `locale ?? doc.locale`, falling back to the English document when the target isn't translated.
+- A **required** relation never returns `null`: `scribe validate` blocks the build on dangling required relations, and `related()` throws if one slips through.
+- Optional relations return `null`; multiple relations silently drop missing targets.
+- Only top-level schema fields are exposed (nested relations are still validated, but dereference them manually).
+
+## Sitemap
+
+```ts
+const entries = await scribe.sitemap({
+  baseUrl: "https://example.com",
+  typeDefaults: {
+    blog: { priority: 0.7, changeFrequency: "monthly" },
+  },
+});
+```
+
+Returns plain JSON entries (`url`, `lastModified`, `changeFrequency`, `priority`, hreflang `alternates.languages` including `x-default`) — the shape matches Next.js `MetadataRoute.Sitemap`, and serializes directly into sitemap XML for any other stack. One entry per English document across all routable types; skips `noindex` and redirect source slugs from `_redirects.json`.
+
+Options: `baseUrl` (required), `contentTypes`, `typeDefaults`, `resolveUrl`, `resolvePathname`, `excludeNoindex` (default true), `includeXDefault` (default true).
+
+## Introspection
+
+Beyond the per-type accessors, the client exposes the resolved config:
+
+```ts
+scribe.config;              // resolved ScribeConfig
+scribe.getType("blog");     // one resolved content type
+scribe.listTypes();         // all content types
+scribe.listRoutableTypes(); // only types with a path template
+```
+
+Useful for generic tooling — e.g. iterating every routable type to build navigation or feeds.
+
+## Redirects
+
+For statically-exported redirect rules (`_redirects.json`, cross-locale slugs), use the build-script entry:
+
+```ts
+// scripts/generate-redirects.ts — run before the app build
+import {
+  buildAllContentRedirects,
+  createProject,
+  createUrlBuilder,
+  loadConfigSync,
+} from "scribe-cms";
+
+const config = loadConfigSync();
+const project = createProject(config);
+const urlBuilder = createUrlBuilder(project.config);
+const rules = buildAllContentRedirects(project, {
+  prefixedLocales: urlBuilder.prefixedLocales,
+});
+// [{ source, destination, permanent: true }, ...]
+// Matches Next.js redirect config directly; map to nginx rules, _redirects,
+// vercel.json, or your framework's equivalent as needed.
+```
+
+## Static raw exports
+
+For LLM/crawler-friendly raw MDX files served as static assets (e.g. `/blog/my-post.mdx`):
+
+```bash
+scribe export-static --out public
+```
+
+Or programmatically:
+
+```ts
+import { writeStaticRawExports, createProject, loadConfigSync } from "scribe-cms";
+
+writeStaticRawExports(createProject(loadConfigSync()), { outDir: "public" });
+```
+
+`getStaticExportRoots(project)` returns managed directory roots to clean before writing (e.g. `blog/`, `fr/blog/`). Documents listed as redirect sources in `_redirects.json` are skipped when `excludeRedirected` is true (default). `noindex` documents are included unless `excludeNoindex` is set. See the [CLI reference](/docs/cli) for the command flags.
+
+## Escape hatch
+
+`scribe.<type>.load()` returns the raw `Map<locale, { bySlug, byEnSlug }>` index. Prefer `list`/`get`/`resolve` — `load()` exists for tooling and unusual access patterns.
+
+## Framework integration
+
+Scribe is framework-agnostic — the runtime is plain Node and works in any server-rendered or statically-built stack. Three rules apply everywhere:
+
+1. Import from **`scribe-cms/runtime`** in app code (it excludes the CLI / translator code paths from bundler tracing); use `scribe-cms` in build scripts.
+2. Keep **`better-sqlite3`** (a native module) and Scribe external to your bundler — e.g. Next.js `serverExternalPackages`, Vite/Astro `ssr.external`, esbuild `external`.
+3. Cache the client in a module singleton:
+
+```ts
+// src/lib/scribe.ts
+import { createScribe } from "scribe-cms/runtime";
+import type { ScribeClient } from "scribe-cms/runtime";
+import config from "../../scribe.config";
+
+let cached: ScribeClient<typeof config> | null = null;
+export function getScribe() {
+  return (cached ??= createScribe(config));
+}
+```
+
+Gate builds on content health: `"build": "scribe validate && <framework build>"`.
+
+### Next.js example
+
+```ts
+// next.config.ts
+const nextConfig = {
+  serverExternalPackages: ["better-sqlite3", "scribe-cms", "scribe-cms/runtime"],
+  // Required on Vercel — Scribe reads content/ and .scribe/ at runtime.
+  outputFileTracingIncludes: {
+    "/**": ["./content/**/*", "./.scribe/**/*"],
+  },
+};
+```
+
+`staticParams()` plugs into `generateStaticParams()`, `alternates()` into `metadata.alternates.languages`, `scribe.sitemap()` into `app/sitemap.ts`, and `buildAllContentRedirects()` into `redirects()`.

@@ -1,0 +1,114 @@
+---
+title: "Translation"
+description: "How scribe translate works: staleness hashing, Gemini, output validation, cost reporting, and review tools."
+order: 4
+---
+
+Scribe translates the English source into every other locale with an LLM (Gemini), and stores the results in SQLite. You never edit locale files — you edit English, re-run `scribe translate`, and commit the store.
+
+## What gets translated
+
+Per document, exactly two things go to the translator:
+
+1. Frontmatter fields marked `field.translatable()` — including fields nested inside arrays and objects.
+2. The MDX body.
+
+Everything else (`field.structural()`, relations, built-in fields) is copied from the English document at load time. With `slugStrategy: "localized"` the translator also produces a per-locale URL slug (ASCII kebab-case, transliterated for non-Latin locales).
+
+## Staleness tracking
+
+Each stored translation records a SHA-256 hash of the English translatable content it was made from. `scribe translate` re-translates a page only when:
+
+- no translation exists for that locale (**missing**), or
+- the English translatable content changed since (**stale**).
+
+Editing a structural field or a `_redirects.json` entry does **not** mark translations stale — those fields aren't translated.
+
+## Output validation
+
+A translation is only persisted if it survives two checks:
+
+1. The returned MDX body must parse (after normalizing escape artifacts and JSX attribute quoting the model sometimes gets wrong).
+2. The returned frontmatter must re-validate against your full Zod schema.
+
+A failing item fails the command with a non-zero exit code — bad model output never reaches the store, so it can never reach production.
+
+## Running it
+
+```bash
+export GEMINI_API_KEY=...        # also read from .env / .env.local
+
+scribe status                     # coverage per type and locale
+scribe translate                  # interactive picker in a TTY
+scribe translate --locale fr de   # specific locales
+scribe translate --preset active  # a localePresets group from the config
+scribe translate --type blog      # one content type
+scribe translate --slug my-post   # one document
+scribe translate --dry-run        # show the worklist, write nothing
+scribe translate --force          # re-translate even when hashes match
+scribe translate --strategy missing-only   # skip stale, only fill gaps
+scribe translate --concurrency 5  # parallel requests (default 3)
+scribe translate --model gemini-3.1-pro
+```
+
+Run in a terminal, `scribe translate` shows a live progress UI with per-item status, running token counts, and an estimated cost in USD. Pass `--no-progress` (or run non-interactively, e.g. in CI) for plain line-by-line logging.
+
+Then commit `.scribe/store.sqlite`.
+
+## Steering the translator
+
+Project-wide defaults and per-type overrides:
+
+```ts
+export default defineConfig({
+  translate: {
+    context: "MyBrand is a B2B SaaS. Never translate the brand name MyBrand.",
+    rules: ["Keep numbers and statistics accurate."],
+  },
+  types: [
+    defineContentType({
+      id: "blog",
+      // ...
+      translate: {
+        rules: [
+          "Preserve all MDX/JSX component tags, props, and URLs exactly.",
+          "Translate link anchor text; never change href paths.",
+        ],
+      },
+    }),
+  ],
+});
+```
+
+| Option | Scope | Description |
+| --- | --- | --- |
+| `context` | project + type | Brand/domain context prepended to every request (project and type contexts are concatenated). |
+| `rules` | project + type | Extra rules appended to the defaults. |
+| `prompt` | project or type | Replace the default system prompt entirely. |
+| `defaultModel` / `model` | project / type | Gemini model id. Default: `gemini-3.1-pro` (also overridable via the `PROSE_GEMINI_MODEL` env var or `--model`). |
+
+Built-in rules (always applied) include: do not translate brand names unless they have a well-known local name in the target market, return MDX bodies with real line breaks (not escaped `\n`), and fix JSX attribute quoting when values contain double quotes.
+
+## Reviewing translations
+
+```bash
+scribe history blog my-post fr    # EN snapshot timeline for one page
+scribe studio                     # read-only web UI on :3600
+```
+
+Every translation links to a snapshot of the English source it was made from (stored in the same SQLite file), so you can audit when, from what, and with which model a page was translated. `scribe history` prints that timeline; the studio shows per-locale coverage, the current missing/stale worklist, and per-document detail with the snapshot alongside the stored translation.
+
+## Locale presets
+
+For incremental rollouts, name locale groups in the config and target them with `--preset`:
+
+```ts
+localePresets: {
+  active: ["fr", "es", "ja"],
+  ultraLight: ["fr"],
+}
+```
+
+```bash
+scribe translate --preset ultraLight
+```

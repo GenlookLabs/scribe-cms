@@ -21,13 +21,14 @@ Requires Node 20+. Set `GEMINI_API_KEY` when using `scribe translate`.
 **1. Config** — `scribe.config.ts` at your project root:
 
 ```ts
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { defineConfig, defineContentType, field } from "scribe-cms";
 
 export default defineConfig({
-  rootDir: path.dirname(fileURLToPath(import.meta.url)),
+  // Keep it relative — the CLI resolves it against this file's directory, the
+  // runtime against process.cwd(). Never derive it from import.meta.url:
+  // bundlers inline that path at build time, which breaks on serverless hosts.
+  rootDir: ".",
   locales: ["en", "fr"],
   types: [
     defineContentType({
@@ -65,15 +66,17 @@ const { document } = scribe.blog.resolve("hello-world", "fr");
 ## CLI
 
 ```bash
-scribe validate                # schemas, relations, translation store
+scribe validate                # schemas, MDX bodies, relations, redirects, store
 scribe translate --locale fr   # translate stale/missing pages (Gemini)
 scribe status                  # translation coverage
+scribe history blog my-post    # EN snapshot timeline for one document
 scribe studio                  # local read-only admin UI
+scribe export-static           # raw MDX files for static hosting / crawlers
 ```
 
 ## Docs
 
-Full guides in [`packages/scribe-cms/docs`](./packages/scribe-cms/docs):
+Rendered docs: **[scribe.genlook.app/docs](https://scribe.genlook.app/docs)** — also in [`packages/scribe-cms/docs`](./packages/scribe-cms/docs):
 
 - [Getting started](./packages/scribe-cms/docs/getting-started.md)
 - [Configuration](./packages/scribe-cms/docs/configuration.md)
@@ -81,11 +84,9 @@ Full guides in [`packages/scribe-cms/docs`](./packages/scribe-cms/docs):
 - [Runtime API](./packages/scribe-cms/docs/runtime-api.md)
 - [Translation](./packages/scribe-cms/docs/translation.md)
 
-Live examples and copy-paste snippets: **[scribe.genlook.app/examples](https://scribe.genlook.app/examples)**
-
 ## Example project
 
-[`apps/web`](./apps/web) is the source for [scribe.genlook.app](https://scribe.genlook.app) — a Next.js site that uses scribe-cms for its own content (pages, code examples, en/fr routing). Browse it on GitHub when you want a real integration to follow.
+[`apps/web`](./apps/web) is the source for [scribe.genlook.app](https://scribe.genlook.app) — a Next.js site that uses scribe-cms for its own content (landing page, docs, changelog, ten locales). Browse it when you want a real integration to follow.
 
 ## Made by Genlook
 

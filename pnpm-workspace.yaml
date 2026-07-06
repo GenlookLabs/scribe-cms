@@ -3,5 +3,11 @@ packages:
   - packages/*
 
 onlyBuiltDependencies:
-  - sqlite3
+  - '@google/genai'
+  - '@parcel/watcher'
+  - '@swc/core'
   - better-sqlite3
+  - esbuild
+  - protobufjs
+  - sharp
+  - sqlite3
