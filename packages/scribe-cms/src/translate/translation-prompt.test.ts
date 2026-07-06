@@ -66,4 +66,20 @@ describe("buildPageTranslationPrompt prefix caching invariant", () => {
     assert.match(prefix, /## EN translatable frontmatter \(JSON\)/);
     assert.match(prefix, /"title": "Hello"/);
   });
+
+  it("asks for body-only JSON when there is no translatable frontmatter", () => {
+    // Mirrors buildGeminiResponseSchema: changelog-like types get a body-only
+    // response schema, so the prompt must not ask for a frontmatter key.
+    const prompt = buildPageTranslationPrompt({
+      resolved,
+      targetLocale: "fr",
+      contextLabel: "0.0.7",
+      translatableFrontmatter: {},
+      enBody,
+      slugStrategy: "fixed",
+    });
+    const outputFormat = prompt.slice(prompt.indexOf("## Output format"));
+    assert.match(outputFormat, /`body` \(string, full MDX body\)\./);
+    assert.doesNotMatch(outputFormat, /`frontmatter`/);
+  });
 });

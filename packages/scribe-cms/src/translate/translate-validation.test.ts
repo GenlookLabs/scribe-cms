@@ -76,6 +76,20 @@ describe("buildGeminiResponseSchema", () => {
     const props = schema.properties as Record<string, Record<string, unknown>>;
     assert.ok(props.slug);
   });
+
+  it("returns a body-only schema when no frontmatter field is translatable", () => {
+    // Changelog-like type: structural-only frontmatter. The schema must still
+    // be returned (structured output prevents malformed free-hand JSON) but
+    // without a frontmatter property — Gemini rejects empty OBJECT properties.
+    const changelogSchema = z.object({
+      version: field.structural(z.string()),
+    });
+    const schema = buildGeminiResponseSchema(changelogSchema, "fixed");
+    assert.ok(schema, "schema must not be null for structural-only types");
+    const props = schema.properties as Record<string, Record<string, unknown>>;
+    assert.deepEqual(Object.keys(props), ["body"]);
+    assert.equal(props.body.type, "string");
+  });
 });
 
 describe("sanitizeTranslatedFrontmatter", () => {

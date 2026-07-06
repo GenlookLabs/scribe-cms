@@ -39,6 +39,22 @@ const TASK_FRAMING =
   "You are localizing the content below into a target language specified at the end of this prompt.";
 
 /**
+ * Describe the expected JSON keys. Mirrors buildGeminiResponseSchema: types
+ * without translatable frontmatter get a body-only response (their structural
+ * frontmatter is carried over from EN, not translated).
+ */
+function buildOutputFormatLine(hasFrontmatter: boolean, slugStrategy: SlugStrategy): string {
+  if (!hasFrontmatter) {
+    return slugStrategy === "localized"
+      ? "`body` (string, full MDX body), `slug` (string)."
+      : "`body` (string, full MDX body).";
+  }
+  return slugStrategy === "localized"
+    ? "`frontmatter` (object with translated frontmatter fields), `body` (string, full MDX body), `slug` (string)."
+    : "`frontmatter` (object), `body` (string).";
+}
+
+/**
  * Build a page translation prompt whose prefix (everything up to and including
  * the EN body) does not vary with locale, and whose suffix carries all
  * locale-specific instructions. This lets Gemini reuse the cached prefix when the
@@ -87,9 +103,10 @@ export function buildPageTranslationPrompt(input: {
     "",
     "## Output format",
     "Return ONLY valid JSON with keys:",
-    input.slugStrategy === "localized"
-      ? "`frontmatter` (object with translated frontmatter fields), `body` (string, full MDX body), `slug` (string)."
-      : "`frontmatter` (object), `body` (string).",
+    buildOutputFormatLine(
+      Object.keys(input.translatableFrontmatter).length > 0,
+      input.slugStrategy,
+    ),
   ];
 
   return [...prefix, ...suffix].join("\n");

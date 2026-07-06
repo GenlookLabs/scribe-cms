@@ -56,17 +56,23 @@ export function buildTranslatableSubschema(schema: z.ZodTypeAny): z.ZodObject | 
   return z.object(out);
 }
 
-/** JSON Schema for Gemini structured output: `{ frontmatter, body, slug? }`. */
+/**
+ * JSON Schema for Gemini structured output: `{ frontmatter, body, slug? }`.
+ * Types without translatable frontmatter get a body-only schema (Gemini
+ * rejects OBJECT schemas with empty `properties`); parsing then defaults the
+ * missing frontmatter to `{}`. Skipping the schema entirely instead would
+ * leave the model free-handing JSON, which fails often on MDX bodies
+ * (unescaped newlines, trailing prose after the JSON).
+ */
 export function buildGeminiResponseSchema(
   schema: z.ZodTypeAny,
   slugStrategy: SlugStrategy,
 ): Record<string, unknown> | null {
   try {
     const translatable = buildTranslatableSubschema(schema);
-    if (!translatable) return null;
 
     const responseShape: Record<string, z.ZodTypeAny> = {
-      frontmatter: translatable,
+      ...(translatable ? { frontmatter: translatable } : {}),
       body: z.string(),
     };
     if (slugStrategy === "localized") {

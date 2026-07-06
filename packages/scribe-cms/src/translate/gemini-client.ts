@@ -49,11 +49,18 @@ export function parseGeminiResponse(text: string): {
   // With responseMimeType "application/json" the payload is already pure JSON.
   // Parse it directly first; only fall back to extraction when the model wraps
   // or pads the JSON (extraction is fragile when the body contains code fences).
+  let parsed: { frontmatter?: Record<string, unknown>; body: string; slug?: string };
   try {
-    return JSON.parse(text.trim());
+    parsed = JSON.parse(text.trim());
   } catch {
-    return JSON.parse(extractJson(text));
+    parsed = JSON.parse(extractJson(text));
   }
+  // Types without translatable frontmatter use a body-only response schema;
+  // default the frontmatter so downstream merge/validation sees an object.
+  if (parsed !== null && typeof parsed === "object" && parsed.frontmatter === undefined) {
+    parsed.frontmatter = {};
+  }
+  return parsed as { frontmatter: Record<string, unknown>; body: string; slug?: string };
 }
 
 /**
