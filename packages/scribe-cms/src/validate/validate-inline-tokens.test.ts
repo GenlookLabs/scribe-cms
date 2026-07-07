@@ -29,7 +29,7 @@ function input(): ScribeConfigInput {
       },
       {
         id: "ref",
-        // No `path`: not routable — url-mode relations to it are errors.
+        // No `path`: not routable — :href relations to it are errors.
         schema: z.object({ name: field.translatable(z.string()) }),
       },
     ],
@@ -53,14 +53,14 @@ before(() => {
   write(
     "blog/good.mdx",
     `---\ntitle: Good\nvars:\n  k: v\n---\n\n` +
-      'Rel ${{relation:blog:target}} slug ${{relation:ref:refonly:slug}} ' +
+      'Rel ${{relation:blog:target:href}} slug ${{relation:ref:refonly:slug}} ' +
       'asset ${{asset:/img/a.webp}} var ${{var:k}} static ${{static:"x"}}',
   );
 
   write(
     "blog/bad.mdx",
     `---\ntitle: Bad\n---\n\n` +
-      'a ${{relation:blog:missing}} b ${{relation:nope:x}} c ${{relation:ref:refonly}} ' +
+      'a ${{relation:blog:missing:href}} b ${{relation:nope:x:href}} c ${{relation:ref:refonly:href}} ' +
       'd ${{asset:/img/missing.webp}} e ${{var:absent}} f ${{static:oops}}',
   );
 
@@ -98,7 +98,7 @@ describe("validateInlineTokens", () => {
     const bad = errorsFor(issues, "bad");
     assert.ok(hasMessage(bad, /no blog doc has that slug/), "unknown enSlug");
     assert.ok(hasMessage(bad, /unknown type "nope"/), "unknown type");
-    assert.ok(hasMessage(bad, /not routable/), "url mode on non-routable target");
+    assert.ok(hasMessage(bad, /not routable/), "href mode on non-routable target");
     assert.ok(hasMessage(bad, /missing on disk/), "missing asset file");
     assert.ok(hasMessage(bad, /absent from this document's vars map/), "missing var key");
     assert.ok(hasMessage(bad, /Malformed inline token/), "malformed static");

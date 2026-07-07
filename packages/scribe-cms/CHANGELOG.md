@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.21 — 2026-07-07
+
+### Changed
+
+- **Breaking:** relation inline tokens now require an explicit mode suffix: `${{relation:type:enSlug:href}}` or `${{relation:type:enSlug:slug}}`. Bare `${{relation:type:enSlug}}` is rejected by the parser and `scribe validate`.
+- `:href` resolves to locale-free pathnames in `createScribe()` (for framework routers such as next-intl `Link`), and to full localized public paths with a file extension in static `.md` exports (`createProject` with `inlineLinkStyle: "export"`).
+- `:slug` continues to resolve to the target's EN slug string in all consumers.
+
 ## 0.0.20 — 2026-07-07
 
 ### Added

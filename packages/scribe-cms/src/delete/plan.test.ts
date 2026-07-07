@@ -150,9 +150,9 @@ test("body relation tokens warn only (never cascade, detach, or block)", () => {
       target: [{ slug: "x", data: {} }],
       post: [
         // Surviving doc whose body links the deleted target: should warn.
-        { slug: "p1", data: {}, body: "See ${{relation:target:x}} here." },
+        { slug: "p1", data: {}, body: "See ${{relation:target:x:href}} here." },
         // A doc that references a NON-deleted target: no warning.
-        { slug: "p2", data: {}, body: "See ${{relation:post:p1}} here." },
+        { slug: "p2", data: {}, body: "See ${{relation:post:p1:href}} here." },
       ],
     },
   );

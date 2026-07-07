@@ -14,7 +14,7 @@ describe("buildBackRefIndex body scanning", () => {
         enSlug: "hello",
         frontmatter: {},
         relationFields: [],
-        body: 'x ${{relation:author:jane}} y ${{relation:author:jane:slug}} z',
+        body: 'x ${{relation:author:jane:href}} y ${{relation:author:jane:slug}} z',
       },
     ]);
     const refs = backRefsFor(index, "author", "jane");
@@ -32,7 +32,7 @@ describe("buildBackRefIndex body scanning", () => {
         relationFields: [
           { path: ["author"], kind: "relation", relationTarget: "author" },
         ],
-        body: "body ${{relation:tag:news}}",
+        body: "body ${{relation:tag:news:href}}",
       },
     ]);
     assert.equal(backRefsFor(index, "author", "jane").length, 1);

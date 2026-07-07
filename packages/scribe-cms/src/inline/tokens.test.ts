@@ -16,7 +16,7 @@ import {
 describe("extractInlineTokens", () => {
   it("extracts each kind and replaces with ordered markers", () => {
     const body =
-      'A ${{static:"hello"}} B ${{relation:blog:my-post}} C ${{relation:blog:my-post:slug}} ' +
+      'A ${{static:"hello"}} B ${{relation:blog:my-post:href}} C ${{relation:blog:my-post:slug}} ' +
       "D ${{asset:/img/a.webp}} E ${{var:cta}} F";
     const { placeholderBody, tokens, malformed } = extractInlineTokens(body);
     assert.equal(malformed.length, 0);
@@ -28,7 +28,7 @@ describe("extractInlineTokens", () => {
       tokens.map((t) => t.kind),
       ["static", "relation", "relation", "asset", "var"],
     );
-    const [s, rUrl, rSlug, a, v] = tokens as [
+    const [s, rHref, rSlug, a, v] = tokens as [
       InlineToken,
       InlineToken,
       InlineToken,
@@ -36,7 +36,7 @@ describe("extractInlineTokens", () => {
       InlineToken,
     ];
     assert.equal(s.kind === "static" && s.text, "hello");
-    assert.ok(rUrl.kind === "relation" && rUrl.mode === "url" && rUrl.enSlug === "my-post");
+    assert.ok(rHref.kind === "relation" && rHref.mode === "href" && rHref.enSlug === "my-post");
     assert.ok(rSlug.kind === "relation" && rSlug.mode === "slug");
     assert.equal(a.kind === "asset" && a.webPath, "/img/a.webp");
     assert.equal(v.kind === "var" && v.key, "cta");
@@ -61,7 +61,7 @@ describe("extractInlineTokens", () => {
     const cases: Array<[string, RegExp]> = [
       ['${{static:not-json}}', /JSON string/],
       ['${{relation:onlyone}}', /relation:/],
-      ['${{relation:blog:post:bogus}}', /mode must be/],
+      ['${{relation:blog:post}}', /relation:/],
       ['${{asset:no-leading-slash}}', /must start with/],
       ['${{var:}}', /missing a key/],
       ['${{weird:x}}', /unknown token kind/],
@@ -124,8 +124,8 @@ describe("hash invariants", () => {
     computePageEnHash(fm, extractInlineTokens(body).placeholderBody);
 
   it("changing a token VALUE does not change the hash", () => {
-    const a = hashOf('Buy ${{relation:blog:old}} now ${{var:x}} ${{asset:/a.webp}} ${{static:"A"}}');
-    const b = hashOf('Buy ${{relation:blog:new}} now ${{var:y}} ${{asset:/b.webp}} ${{static:"B"}}');
+    const a = hashOf('Buy ${{relation:blog:old:href}} now ${{var:x}} ${{asset:/a.webp}} ${{static:"A"}}');
+    const b = hashOf('Buy ${{relation:blog:new:href}} now ${{var:y}} ${{asset:/b.webp}} ${{static:"B"}}');
     assert.equal(a, b);
   });
 

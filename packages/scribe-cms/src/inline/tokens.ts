@@ -32,8 +32,8 @@ export interface RelationInlineToken {
   kind: "relation";
   targetTypeId: string;
   enSlug: string;
-  /** `"url"` resolves to the localized URL; `"slug"` resolves to the EN slug. */
-  mode: "url" | "slug";
+  /** `"href"` resolves to a link path; `"slug"` resolves to the EN slug. */
+  mode: "href" | "slug";
   raw: string;
 }
 
@@ -143,18 +143,18 @@ function parseTokenInner(inner: string): ParseResult {
     case "relation": {
       // Slugs cannot contain ":" so splitting is unambiguous.
       const parts = rest.split(":");
-      if (parts.length < 2 || parts.length > 3) {
+      if (parts.length !== 3) {
         return {
           ok: false,
-          reason: `relation must be relation:<typeId>:<enSlug> or relation:<typeId>:<enSlug>:slug`,
+          reason: `relation must be relation:<typeId>:<enSlug>:href or relation:<typeId>:<enSlug>:slug`,
         };
       }
       const [targetTypeId, enSlug, mode] = parts;
       if (!targetTypeId || !enSlug) {
         return { ok: false, reason: `relation is missing a typeId or enSlug` };
       }
-      if (mode !== undefined && mode !== "slug") {
-        return { ok: false, reason: `relation mode must be "slug" (got "${mode}")` };
+      if (mode !== "href" && mode !== "slug") {
+        return { ok: false, reason: `relation mode must be "href" or "slug" (got "${mode}")` };
       }
       return {
         ok: true,
@@ -162,7 +162,7 @@ function parseTokenInner(inner: string): ParseResult {
           kind: "relation",
           targetTypeId,
           enSlug,
-          mode: mode === "slug" ? "slug" : "url",
+          mode,
         },
       };
     }

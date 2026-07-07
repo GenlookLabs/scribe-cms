@@ -106,7 +106,7 @@ describe("renderMdxApprox", () => {
   });
 
   it("renders a relation token in a markdown link dest as a studio anchor", () => {
-    const html = preview("[label](${{relation:glossary:foo}})");
+    const html = preview("[label](${{relation:glossary:foo:href}})");
     assert.match(
       html,
       /<a class="mdx-relation-link" href="\/type\/glossary\/doc\/foo">label<\/a>/,
@@ -114,7 +114,7 @@ describe("renderMdxApprox", () => {
   });
 
   it("renders a standalone relation token as a chip link", () => {
-    const html = preview("See ${{relation:glossary:foo}}.");
+    const html = preview("See ${{relation:glossary:foo:href}}.");
     assert.match(
       html,
       /<a class="mdx-relation-chip" href="\/type\/glossary\/doc\/foo">foo<\/a>/,
@@ -122,7 +122,7 @@ describe("renderMdxApprox", () => {
   });
 
   it("renders a dangling relation as broken, without a live href", () => {
-    const html = preview("[label](${{relation:glossary:foo}})", { docExists: () => false });
+    const html = preview("[label](${{relation:glossary:foo:href}})", { docExists: () => false });
     assert.match(html, /<span class="mdx-relation-broken" title="missing target">label<\/span>/);
     assert.doesNotMatch(html, /<a class="mdx-relation-link"/);
   });

@@ -264,26 +264,26 @@ describe("buildWorklist inline-token staleness", () => {
   }
 
   it("a doc with an inline token is NOT reported stale after a prepare-time upsert", () => {
-    const config = setup("Read ${{relation:blog:hello}} now.");
+    const config = setup("Read ${{relation:blog:hello:href}} now.");
     storeFreshTranslation(config);
     const items = buildWorklist(config, { locales: ["fr"] });
     assert.equal(items.length, 0, JSON.stringify(items));
   });
 
   it("changing only a token's value keeps the translation fresh", () => {
-    const config = setup("Read ${{relation:blog:hello}} now.");
+    const config = setup("Read ${{relation:blog:hello:href}} now.");
     storeFreshTranslation(config);
     // Swap the relation target: the placeholder body is unchanged, so the hash
     // (and staleness) must not move.
-    rewriteBody(config, "Read ${{relation:blog:other}} now.");
+    rewriteBody(config, "Read ${{relation:blog:other:href}} now.");
     const items = buildWorklist(config, { locales: ["fr"] });
     assert.equal(items.length, 0, JSON.stringify(items));
   });
 
   it("adding a second token IS reported stale", () => {
-    const config = setup("Read ${{relation:blog:hello}} now.");
+    const config = setup("Read ${{relation:blog:hello:href}} now.");
     storeFreshTranslation(config);
-    rewriteBody(config, "Read ${{relation:blog:hello}} and ${{relation:blog:two}} now.");
+    rewriteBody(config, "Read ${{relation:blog:hello:href}} and ${{relation:blog:two:href}} now.");
     const items = buildWorklist(config, { locales: ["fr"] });
     assert.equal(items.length, 1);
     assert.equal(items[0]!.reason, "stale");

@@ -7,11 +7,11 @@
 
 ## Motivation
 
-MDX bodies often need a value that Scribe already knows: the localized URL of
-another entry, the public URL of an asset, a literal that must never be
-translated, or a small per-document string reused in several places. Hard-coding
-these makes bodies brittle (a renamed slug or moved asset silently breaks links)
-and pollutes translation (a URL should never be "translated").
+MDX bodies often need a value that Scribe already knows: a link to another
+entry, the public URL of an asset, a literal that must never be translated, or
+a small per-document string reused in several places. Hard-coding these makes
+bodies brittle (a renamed slug or moved asset silently breaks links) and
+pollutes translation (a URL should never be "translated").
 
 Inline tokens solve this: they are authored once in the EN body and resolved per
 locale on read, while translation treats them as opaque, immutable placeholders.
@@ -23,12 +23,32 @@ A token is `${{<kind>:<args>}}`. Four kinds:
 | Token | Resolves to |
 | --- | --- |
 | `${{static:"text"}}` | The verbatim literal `text` (a JSON string, so quotes/escapes are well defined). Never translated, identical in every locale. |
-| `${{relation:<typeId>:<enSlug>}}` | The **localized URL** of the target entry, via the target type's `path` template and the locale-aware URL builder. |
+| `${{relation:<typeId>:<enSlug>:href}}` | A **link path** to the target entry (see [Relation modes](#relation-modes)). Mode is **required**. |
 | `${{relation:<typeId>:<enSlug>:slug}}` | The target's **EN slug** string (a stable identifier for MDX components that load Scribe content themselves). |
 | `${{asset:/web/path.webp}}` | The public asset URL (`assets.publicPath` joined to the path). |
 | `${{var:key}}` | `frontmatter.vars[key]` of the same document. |
 
 Slugs cannot contain `:`, so relation parsing is unambiguous.
+
+Bare `${{relation:<typeId>:<enSlug>}}` (no mode suffix) is a **validation error**.
+
+### Relation modes
+
+Every relation token must end with `:href` or `:slug`.
+
+| Mode | Purpose |
+| --- | --- |
+| `:href` | Navigable link — resolved shape depends on the consumer (see below). |
+| `:slug` | Identity — always the target's EN slug string. |
+
+**`:href` resolution by consumer**
+
+| Consumer | `:href` resolves to |
+| --- | --- |
+| `createScribe()` (app runtime) | Locale-free pathname with localized slug, e.g. `/for/vestidos` — pass directly to next-intl `Link`. |
+| Static `.md` export (`linkStyle: "export"`) | Full localized public path with file extension, e.g. `/es/for/vestidos.md` — matches export file layout. |
+
+Configure export resolution via `createProject(config, { resolveInlineTokens: true, inlineLinkStyle: "export", exportLinkExtension: ".md" })`.
 
 ### Escape hatch
 
@@ -83,18 +103,20 @@ keep the `%%n%%` markers; they are filled at read time.
 ## Read-time substitution
 
 Substitution is a runtime read-path concern, gated exactly like asset
-resolution. `createScribe()` enables it; the CLI, `scribe validate`, and the
-studio keep raw token syntax so they can introspect and re-hash source bodies.
+resolution. `createScribe()` enables it with `inlineLinkStyle: "app"`; static
+exports enable it with `inlineLinkStyle: "export"`. The CLI, `scribe validate`,
+and the studio keep raw token syntax so they can introspect and re-hash source
+bodies.
 
 - **EN documents** have their tokens substituted in place, resolved for the
   default locale.
 - **Translated documents** have their `%%n%%` markers filled using the token list
   extracted from the **current** EN body, resolved for the document's locale, so
-  a relation URL always points at the live localized slug even when the
+  a relation link always points at the live localized slug even when the
   translation itself is older.
 
 Resolution edge cases resolve to an empty string at runtime (and are flagged by
-`scribe validate`): a relation whose target type has no `path` (in URL mode), and
+`scribe validate`): a relation whose target type has no `path` (in `:href` mode), and
 a missing `var` key.
 
 ## Validation
@@ -102,8 +124,8 @@ a missing `var` key.
 `scribe validate` reports entry-level issues (so the studio badges pick them up):
 
 - **Malformed token syntax** (bad JSON string, wrong arity, unknown kind): error.
-- **`relation`**: unknown `typeId`, unknown `enSlug`, or a URL-mode relation
-  targeting a non-routable type: error.
+- **`relation`**: unknown `typeId`, unknown `enSlug`, missing mode, or an `:href`
+  relation targeting a non-routable type: error.
 - **`asset`**: the file is missing on disk: error.
 - **`var`**: the key is absent from the document's `vars` map, or `vars` is
   present but is not a string-to-string record: error.

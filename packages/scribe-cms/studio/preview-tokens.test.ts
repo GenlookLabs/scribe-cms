@@ -36,7 +36,7 @@ describe("buildPreviewTokens", () => {
   });
 
   it("maps relation tokens with studioUrl and label when the target exists", () => {
-    const { tokens } = extractInlineTokens("x ${{relation:glossary:foo}} y");
+    const { tokens } = extractInlineTokens("x ${{relation:glossary:foo:href}} y");
     const pv = buildPreviewTokens(tokens, { enFrontmatter: {}, docExists: () => true });
     assert.equal(pv[0]!.kind, "relation");
     assert.equal(pv[0]!.studioUrl, "/type/glossary/doc/foo");
@@ -45,7 +45,7 @@ describe("buildPreviewTokens", () => {
   });
 
   it("marks relation tokens as dangling when docExists returns false", () => {
-    const { tokens } = extractInlineTokens("x ${{relation:glossary:foo}} y");
+    const { tokens } = extractInlineTokens("x ${{relation:glossary:foo:href}} y");
     const pv = buildPreviewTokens(tokens, { enFrontmatter: {}, docExists: () => false });
     assert.equal(pv[0]!.dangling, true);
   });

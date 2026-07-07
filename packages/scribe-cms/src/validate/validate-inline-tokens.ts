@@ -87,7 +87,7 @@ export function validateInlineTokens(config: ScribeConfig): ValidateIssue[] {
               });
               break;
             }
-            if (token.mode === "url") {
+            if (token.mode === "href") {
               const targetType = typeById.get(token.targetTypeId)!;
               if (!isRoutableType(targetType)) {
                 issues.push({

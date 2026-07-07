@@ -29,6 +29,16 @@ export interface InlineResolver {
   ): string;
 }
 
+/** How `:href` relation tokens resolve (see `docs/inline-tokens.md`). */
+export type InlineLinkStyle = "app" | "export";
+
+export interface CreateInlineResolverOptions {
+  /** Default `"app"` — locale-free pathnames for framework routers. */
+  linkStyle?: InlineLinkStyle;
+  /** File extension appended to localized slugs in `"export"` mode. Default `.md`. */
+  exportExtension?: `.${string}`;
+}
+
 function slugKey(typeId: string, enSlug: string, locale: string): string {
   return `${typeId}\u0000${enSlug}\u0000${locale}`;
 }
@@ -38,7 +48,12 @@ function isStringRecord(value: unknown): value is Record<string, string> {
   return Object.values(value as Record<string, unknown>).every((v) => typeof v === "string");
 }
 
-export function createInlineResolver(config: ScribeConfig): InlineResolver {
+export function createInlineResolver(
+  config: ScribeConfig,
+  options: CreateInlineResolverOptions = {},
+): InlineResolver {
+  const linkStyle = options.linkStyle ?? "app";
+  const exportExtension = options.exportExtension ?? ".md";
   const urlBuilder: UrlBuilder = createUrlBuilder(config);
   const typeById = new Map(config.types.map((t) => [t.id, t]));
   const storePath = resolveStorePath(config);
@@ -108,7 +123,10 @@ export function createInlineResolver(config: ScribeConfig): InlineResolver {
           if (token.mode === "slug") return token.enSlug;
           if (!isRoutableType(type)) return "";
           const slug = localizedSlug(token.targetTypeId, token.enSlug, locale);
-          return urlBuilder.resolvePath(type.path!, slug, locale);
+          if (linkStyle === "export") {
+            return urlBuilder.resolvePath(type.path!, `${slug}${exportExtension}`, locale);
+          }
+          return type.path!.replace("{slug}", slug);
         }
       }
     },

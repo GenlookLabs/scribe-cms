@@ -32,7 +32,7 @@ function input(): ScribeConfigInput {
 }
 
 const HOST_BODY =
-  'Link ${{relation:blog:target}} id ${{relation:blog:target:slug}} ' +
+  'Link ${{relation:blog:target:href}} id ${{relation:blog:target:slug}} ' +
   'asset ${{asset:/img/a.webp}} var ${{var:cta}} static ${{static:"Hi"}} esc $\\{{lit}}';
 
 before(() => {
@@ -108,7 +108,7 @@ describe("loader inline substitution (gate on: createScribe)", () => {
     // the stable EN slug; var reads the EN vars map; escape decodes.
     assert.equal(
       host!.content,
-      "Lien /fr/blog/cible id target actif /static/img/a.webp var Shop now statique Hi esc ${{lit}}",
+      "Lien /blog/cible id target actif /static/img/a.webp var Shop now statique Hi esc ${{lit}}",
     );
   });
 });

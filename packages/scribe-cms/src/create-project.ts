@@ -10,7 +10,11 @@ import type {
 } from "./core/types.js";
 import { listRelationFields, type SchemaFieldMeta } from "./core/introspect-schema.js";
 import { createContentLoader } from "./loader/create-loader.js";
-import { createInlineResolver, type InlineResolver } from "./inline/resolve-tokens.js";
+import {
+  createInlineResolver,
+  type InlineLinkStyle,
+  type InlineResolver,
+} from "./inline/resolve-tokens.js";
 import { resolveLocalizedDocument } from "./i18n/resolve-document.js";
 import { createUrlBuilder, isRoutableType } from "./i18n/build-url.js";
 
@@ -224,9 +228,18 @@ function buildRuntime(
  *   the CLI, validation, and studio keep raw token syntax.
  * @internal
  */
+export interface CreateProjectOptions {
+  resolveAssets?: boolean;
+  resolveInlineTokens?: boolean;
+  /** How `:href` relation tokens resolve. Default `"app"`. */
+  inlineLinkStyle?: InlineLinkStyle;
+  /** Extension for `:href` in `"export"` mode. Default `.md`. */
+  exportLinkExtension?: `.${string}`;
+}
+
 export function createProject(
   config: ScribeConfig,
-  options: { resolveAssets?: boolean; resolveInlineTokens?: boolean } = {},
+  options: CreateProjectOptions = {},
 ): ScribeProject {
   const runtimes = new Map<string, ContentTypeRuntime>();
   const getRuntime = (id: string): ContentTypeRuntime => {
@@ -241,7 +254,10 @@ export function createProject(
   // slugs straight from the store (never through another loader), so building it
   // here cannot recurse into the runtimes it lives alongside.
   const inlineResolver = options.resolveInlineTokens
-    ? createInlineResolver(config)
+    ? createInlineResolver(config, {
+        linkStyle: options.inlineLinkStyle,
+        exportExtension: options.exportLinkExtension,
+      })
     : undefined;
 
   for (const type of config.types) {
