@@ -7,10 +7,25 @@ const ASSET_META = Symbol.for("@genlook/scribe/assetMeta");
 
 export type FieldKind = "translatable" | "structural";
 
+/**
+ * What happens to a document that references a target when that target is
+ * deleted (see `docs/deletion.md`).
+ * - `"restrict"` (default) — deletion of the target is blocked.
+ * - `"detach"` — the reference is removed (dropped from arrays, optional single
+ *   relations cleared). A required single relation can never be detached.
+ * - `"cascade"` — the referencing document is deleted too, recursively.
+ */
+export type OnTargetDelete = "restrict" | "detach" | "cascade";
+
+/** What happens to an asset file when its own document is deleted. Default `"delete"`. */
+export type AssetOnDelete = "delete" | "keep";
+
 export interface RelationMeta {
   typeId: string;
   multiple: boolean;
   optional: boolean;
+  /** Cascade behavior applied when the referenced target is deleted. */
+  onTargetDelete: OnTargetDelete;
 }
 
 /** Constraints carried by a `field.asset()` schema (see `docs/assets.md`). */
@@ -20,6 +35,8 @@ export interface AssetMeta {
   formats?: string[];
   maxKB?: number;
   optional: boolean;
+  /** Whether the file is removed when its document is deleted. Default `"delete"`. */
+  onDelete: AssetOnDelete;
 }
 
 /**
@@ -152,6 +169,11 @@ export interface RelationFieldOptions {
   min?: number;
   /** Maximum item count (`multiple: true` only). */
   max?: number;
+  /**
+   * What happens to THIS document when the referenced target is deleted:
+   * `"restrict"` (default), `"detach"`, or `"cascade"`. See `docs/deletion.md`.
+   */
+  onTargetDelete?: OnTargetDelete;
 }
 
 /**
@@ -175,6 +197,12 @@ export interface AssetFieldOptions {
   maxKB?: number;
   /** The field may be absent (only meaningful without `template`). A present value whose file is missing is still an error. */
   optional?: boolean;
+  /**
+   * What happens to the file when its own document is deleted: `"delete"`
+   * (default) or `"keep"`. A shared (non-templated) path is only removed when no
+   * document outside the deletion set still references it. See `docs/deletion.md`.
+   */
+  onDelete?: AssetOnDelete;
 }
 
 type Bool<T> = [T] extends [true] ? true : false;
@@ -239,7 +267,8 @@ export const field = {
     } else {
       inner = z.string().min(1);
     }
-    markRelation(inner, { typeId, multiple, optional });
+    const onTargetDelete = options?.onTargetDelete ?? "restrict";
+    markRelation(inner, { typeId, multiple, optional, onTargetDelete });
     const schema = optional ? inner.optional() : inner;
     return schema as RelationFieldFor<TTarget, TOpts>;
   },
@@ -252,6 +281,7 @@ export const field = {
       formats: options?.formats,
       maxKB: options?.maxKB,
       optional,
+      onDelete: options?.onDelete ?? "delete",
     });
     // A templated field may be omitted in frontmatter — the loader materializes it.
     const schema = optional || options?.template !== undefined ? inner.optional() : inner;

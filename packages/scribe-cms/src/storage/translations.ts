@@ -199,6 +199,58 @@ export function latestTranslationAtByLocale(
     .all() as Array<{ locale: string; latest: string }>;
 }
 
+/** Count translation rows for a single EN document (across every locale). */
+export function countTranslationsForEnSlug(
+  db: Database.Database,
+  contentType: string,
+  enSlug: string,
+): number {
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) as count FROM translations WHERE content_type = ? AND en_slug = ?`,
+    )
+    .get(contentType, enSlug) as { count: number };
+  return row.count;
+}
+
+/** Count EN snapshot rows for a single EN document. */
+export function countEnSnapshotsForEnSlug(
+  db: Database.Database,
+  contentType: string,
+  enSlug: string,
+): number {
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) as count FROM en_snapshots WHERE content_type = ? AND en_slug = ?`,
+    )
+    .get(contentType, enSlug) as { count: number };
+  return row.count;
+}
+
+/** Delete every translation row for an EN document. Returns the number removed. */
+export function deleteTranslationsForEnSlug(
+  db: Database.Database,
+  contentType: string,
+  enSlug: string,
+): number {
+  const info = db
+    .prepare(`DELETE FROM translations WHERE content_type = ? AND en_slug = ?`)
+    .run(contentType, enSlug);
+  return info.changes;
+}
+
+/** Delete every EN snapshot row for an EN document. Returns the number removed. */
+export function deleteEnSnapshotsForEnSlug(
+  db: Database.Database,
+  contentType: string,
+  enSlug: string,
+): number {
+  const info = db
+    .prepare(`DELETE FROM en_snapshots WHERE content_type = ? AND en_slug = ?`)
+    .run(contentType, enSlug);
+  return info.changes;
+}
+
 export function countStaleTranslations(
   db: Database.Database,
   contentType: string,

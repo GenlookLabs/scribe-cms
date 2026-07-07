@@ -37,12 +37,15 @@ import {
   frontmatterOnlyChip,
   notTranslatableChip,
   renderCollectionBrowser,
+  renderDeletionPlanPage,
   renderEntryInspector,
   typeBadges,
   type InspectorContext,
   type ValidationBuckets,
 } from "./content-views.js";
 import { renderAssetBrowser } from "./asset-views.js";
+import { buildDeletionPlan, isPlanBlocked, type DeletionPlan } from "../src/delete/plan.js";
+import { executeDeletionPlan } from "../src/delete/execute.js";
 import { renderSearchPage } from "./search.js";
 import { contentTypeForPath, resolveAssetWebPath, statAsset } from "./asset-serve.js";
 import { StudioCache, computeContentFingerprint } from "./studio-cache.js";
@@ -824,6 +827,28 @@ export async function startStudio(
     db.close();
 
     const bodyView = c.req.query("body") === "preview" ? "preview" : "raw";
+
+    // Prev/next in the collection's default order (same order the table uses).
+    // Preserve the current locale + body query params on the target hrefs.
+    const carry = new URLSearchParams();
+    if (locale !== config.defaultLocale) carry.set("locale", locale);
+    if (bodyView === "preview") carry.set("body", "preview");
+    const qs = carry.toString();
+    const suffix = qs ? `?${qs}` : "";
+    const orderedSlugs = type.list().map((d) => d.enSlug);
+    const currentIndex = orderedSlugs.indexOf(enSlug);
+    const linkFor = (slug: string) =>
+      `/types/${encodePathSegment(typeId)}/${encodePathSegment(slug)}${suffix}`;
+    const prev =
+      currentIndex > 0
+        ? { href: linkFor(orderedSlugs[currentIndex - 1]!), slug: orderedSlugs[currentIndex - 1]! }
+        : null;
+    const next =
+      currentIndex >= 0 && currentIndex < orderedSlugs.length - 1
+        ? { href: linkFor(orderedSlugs[currentIndex + 1]!), slug: orderedSlugs[currentIndex + 1]! }
+        : null;
+    const deleteHref = `/types/${encodePathSegment(typeId)}/${encodePathSegment(enSlug)}/delete`;
+
     const ctx: InspectorContext = {
       project,
       config,
@@ -837,6 +862,9 @@ export async function startStudio(
       buckets: cache.buckets,
       localeTabs,
       bodyView,
+      prev,
+      next,
+      deleteHref,
     };
     const title = docTitleFromFrontmatter(enDoc.frontmatter as Record<string, unknown>, enSlug);
     return c.html(
@@ -845,6 +873,76 @@ export async function startStudio(
         typeBadges: cache.typeBadges,
       }),
     );
+  });
+
+  // Entry deletion: confirmation page (GET) + execution (POST). The studio's
+  // first mutating route; it stays a localhost dev tool (POST-only, no CSRF).
+  app.get("/types/:typeId/:enSlug/delete", (c) => {
+    const typeId = c.req.param("typeId");
+    const enSlug = c.req.param("enSlug");
+    const cache = getStudioCache();
+    const type = getTypeSafe(typeId);
+    if (!type) {
+      return c.html(
+        renderLayout("Not found", `<div class="toolbar">Unknown type</div>`, project, {
+          typeBadges: cache.typeBadges,
+        }),
+        404,
+      );
+    }
+    let plan: DeletionPlan;
+    try {
+      plan = buildDeletionPlan(project, typeId, enSlug);
+    } catch {
+      return c.html(
+        renderLayout(
+          "Not found",
+          `<div class="toolbar">Not found</div><p class="dim" style="padding:12px">${escapeHtml(enSlug)}</p>`,
+          project,
+          { activeTypeId: typeId, typeBadges: cache.typeBadges },
+        ),
+        404,
+      );
+    }
+    const cancelHref = `/types/${encodePathSegment(typeId)}/${encodePathSegment(enSlug)}`;
+    const postHref = `/types/${encodePathSegment(typeId)}/${encodePathSegment(enSlug)}/delete`;
+    const html = renderDeletionPlanPage(project, plan, { typeId, enSlug, cancelHref, postHref });
+    return c.html(
+      renderLayout(`Delete ${enSlug}`, html, project, {
+        activeTypeId: typeId,
+        typeBadges: cache.typeBadges,
+      }),
+    );
+  });
+
+  app.post("/types/:typeId/:enSlug/delete", async (c) => {
+    const typeId = c.req.param("typeId");
+    const enSlug = c.req.param("enSlug");
+    const type = getTypeSafe(typeId);
+    if (!type) return c.text("Unknown type", 404);
+    let plan: DeletionPlan;
+    try {
+      plan = buildDeletionPlan(project, typeId, enSlug);
+    } catch {
+      return c.text("Not found", 404);
+    }
+    if (isPlanBlocked(plan)) {
+      // A blocked plan can never be executed; bounce back to the confirmation page.
+      return c.redirect(
+        `/types/${encodePathSegment(typeId)}/${encodePathSegment(enSlug)}/delete`,
+        303,
+      );
+    }
+    try {
+      executeDeletionPlan(project, plan);
+    } catch (err) {
+      console.error("[scribe:studio] deletion failed:", err);
+      return c.text("Deletion failed", 500);
+    }
+    // Refresh derived data so the collection view reflects the deletion at once.
+    studioCache.invalidate();
+    studioCache.get();
+    return c.redirect(`/types/${encodePathSegment(typeId)}`, 303);
   });
 
   // Global full-text search (EN content).

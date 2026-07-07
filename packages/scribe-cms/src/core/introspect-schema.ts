@@ -1,5 +1,12 @@
 import type { z } from "zod";
-import { getAssetMeta, getFieldKind, getRelationTarget, peelOptionalWrappers } from "./field.js";
+import {
+  getAssetMeta,
+  getFieldKind,
+  getRelationTarget,
+  peelOptionalWrappers,
+  type AssetOnDelete,
+  type OnTargetDelete,
+} from "./field.js";
 import type { ContentTypeInput } from "./types.js";
 
 export interface SchemaFieldMeta {
@@ -8,11 +15,15 @@ export interface SchemaFieldMeta {
   relationTarget?: string;
   relationMultiple?: boolean;
   relationOptional?: boolean;
+  /** Cascade behavior when the referenced target is deleted (relation fields). */
+  relationOnTargetDelete?: OnTargetDelete;
   assetDir?: string;
   assetTemplate?: string;
   assetFormats?: string[];
   assetMaxKB?: number;
   assetOptional?: boolean;
+  /** Whether the asset file is deleted with its document (asset fields). */
+  assetOnDelete?: AssetOnDelete;
 }
 
 function getArrayElement(schema: z.ZodTypeAny): z.ZodTypeAny | null {
@@ -43,6 +54,7 @@ export function introspectSchema(schema: z.ZodTypeAny, prefix: string[] = []): S
         relationTarget: relation.typeId,
         relationMultiple: relation.multiple,
         relationOptional: relation.optional,
+        relationOnTargetDelete: relation.onTargetDelete,
       },
     ];
   }
@@ -58,6 +70,7 @@ export function introspectSchema(schema: z.ZodTypeAny, prefix: string[] = []): S
         assetFormats: asset.formats,
         assetMaxKB: asset.maxKB,
         assetOptional: asset.optional,
+        assetOnDelete: asset.onDelete,
       },
     ];
   }

@@ -116,9 +116,16 @@ scribe translate --direct      # per-page API calls at full price, immediate res
 scribe translate --resume      # pick up pending batch jobs from an interrupted run
 scribe translate --dry-run     # show the worklist without calling the API
 scribe history blog my-post fr # EN snapshot timeline for one document
+scribe delete blog my-post     # delete an entry + its reference cascade (--dry-run, --yes)
 scribe studio                  # read-only local admin UI
 scribe export-static           # raw MDX files for static hosting / crawlers
 ```
+
+`scribe delete <type> <slug>` prints the full impact plan (cascading deletes,
+reference detaches, asset files, store rows, and any blockers), then asks for
+confirmation. `--dry-run` prints the plan and stops; `--yes` skips the prompt.
+A blocked deletion (a `restrict` reference or a required single relation) exits
+non-zero without touching anything. See [Entry deletion](./docs/deletion.md).
 
 Translated output is checked before it is stored: the returned MDX body must
 parse and the frontmatter must re-validate against your Zod schema, so a bad

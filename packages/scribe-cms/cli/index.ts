@@ -8,6 +8,9 @@ import {
   writeStaticRawExports,
 } from "../src/index.js";
 import { listEnSnapshotsForEnSlug } from "../src/storage/translations.js";
+import { buildDeletionPlan } from "../src/delete/plan.js";
+import { executeDeletionPlan } from "../src/delete/execute.js";
+import { renderDeletionPlanText } from "../src/delete/render-text.js";
 import { loadEnvFromCwd } from "../src/config/load-env.js";
 import { buildWorklist, resolveLocalesFromPreset, type TranslationWorklistStrategy } from "../src/translate/worklist.js";
 import { startStudio } from "../studio/server.js";
@@ -24,6 +27,7 @@ interface CliOptions {
   slug?: string;
   model?: string;
   dryRun?: boolean;
+  yes?: boolean;
   force?: boolean;
   port?: number;
   concurrency?: number;
@@ -83,6 +87,11 @@ function parseArgs(argv: string[]): { command: string; options: CliOptions; rest
     }
     if (arg === "--dry-run") {
       options.dryRun = true;
+      i++;
+      continue;
+    }
+    if (arg === "--yes" || arg === "-y") {
+      options.yes = true;
       i++;
       continue;
     }
@@ -173,8 +182,13 @@ Commands:
   export-static          Write raw MDX files for static hosting
   translate              Translate stale/missing locale pages
   history <type> <slug>  Show EN snapshot timeline
+  delete <type> <slug>   Delete an entry (with reference cascade)
   studio                 Start read-only local studio
   version                Print scribe-cms version
+
+Delete flags:
+  --dry-run              Print the deletion plan and exit without deleting
+  --yes, -y              Skip the confirmation prompt
 
 Export-static flags:
   --out <dir>            Output directory (default: public)
@@ -340,6 +354,50 @@ mode to use.
           `${row.created_at} snapshot=#${row.id} en_hash=${row.en_hash.slice(0, 8)} locales=${locales || "—"}`,
         );
       }
+      break;
+    }
+    case "delete": {
+      const [typeId, enSlug] = rest;
+      if (!typeId || !enSlug) {
+        throw new Error("Usage: scribe delete <type> <en-slug> [--yes] [--dry-run]");
+      }
+      const plan = buildDeletionPlan(project, typeId, enSlug);
+      console.log(renderDeletionPlanText(plan));
+
+      if (plan.blocked.length > 0) {
+        console.log(
+          "\nDeletion is blocked. Resolve the references above (or change their onTargetDelete) and retry.",
+        );
+        process.exitCode = 1;
+        break;
+      }
+
+      if (options.dryRun) {
+        console.log("\nDry run: nothing was deleted.");
+        break;
+      }
+
+      if (!options.yes) {
+        const readline = await import("node:readline");
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+        const answer = await new Promise<string>((resolve) => {
+          rl.question("\nProceed with deletion? [y/N] ", (a) => {
+            rl.close();
+            resolve(a);
+          });
+        });
+        if (answer.trim().toLowerCase() !== "y" && answer.trim().toLowerCase() !== "yes") {
+          console.log("Aborted.");
+          break;
+        }
+      }
+
+      const outcome = executeDeletionPlan(project, plan);
+      console.log(
+        `\nDeleted ${outcome.deletedFiles.length} file(s), ${outcome.deletedAssets.length} asset(s), ` +
+          `detached ${outcome.detachedFiles.length} file(s), removed ${outcome.translationsDeleted} translation row(s) ` +
+          `and ${outcome.snapshotsDeleted} snapshot(s).`,
+      );
       break;
     }
     case "studio": {

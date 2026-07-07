@@ -100,6 +100,7 @@ const schema = z.object({
 | `multiple` | `false` | The field is an array of slugs. |
 | `optional` | `false` | The field may be omitted. `related()` then returns `null` (single) or skips missing items (multiple). |
 | `min` / `max` | — | Item count bounds (`multiple: true` only). |
+| `onTargetDelete` | `"restrict"` | What happens to this document when the referenced target is deleted (`scribe delete`): `"restrict"` blocks the deletion, `"detach"` removes the reference, `"cascade"` deletes this document too. See [Entry deletion](./deletion.md). |
 
 Constraints go in the options object — **not** chained Zod methods. Chaining
 (`.max(8)`, `.optional()`) clones the schema and would strip the relation
@@ -129,6 +130,7 @@ const schema = z.object({
 | `formats` | Allowed extensions (lowercase, no dot). Violation is a warning. |
 | `maxKB` | File-size budget. Violation is a warning. |
 | `optional` | The field may be absent (only meaningful without `template`). A present value whose file is missing is still an error. |
+| `onDelete` | `"delete"` (default) removes the file when its document is deleted; `"keep"` leaves it. A shared (non-templated) path is only removed when no document outside the deletion set still references it. See [Entry deletion](./deletion.md). |
 
 Constraints go in the options object, not chained Zod methods. Requires the
 `assets` config group to be enabled. See [Asset management](./assets.md) for the

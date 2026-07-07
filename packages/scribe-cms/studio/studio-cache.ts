@@ -113,6 +113,17 @@ export class StudioCache<T> {
     return this.building;
   }
 
+  /**
+   * Drop the cached value so the next `get()` rebuilds synchronously. Used after
+   * a mutation (e.g. an entry deletion) so derived data — back-refs, badges,
+   * validation — reflects the change on the very next request rather than after
+   * the next background tick.
+   */
+  invalidate(): void {
+    this.current = null;
+    this.pendingFingerprint = null;
+  }
+
   private scheduleRefresh(fingerprint: string): void {
     // Dedupe: one in-flight rebuild per target fingerprint.
     if (this.building && this.pendingFingerprint === fingerprint) return;

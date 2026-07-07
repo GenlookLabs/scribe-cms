@@ -7,13 +7,23 @@ import { introspectSchema, listAssetFields, listRelationFields } from "./introsp
 describe("field.relation metadata durability", () => {
   it("plain single relation carries metadata", () => {
     const meta = getRelationTarget(field.relation("author"));
-    assert.deepEqual(meta, { typeId: "author", multiple: false, optional: false });
+    assert.deepEqual(meta, {
+      typeId: "author",
+      multiple: false,
+      optional: false,
+      onTargetDelete: "restrict",
+    });
   });
 
   it("optional single relation keeps metadata through the ZodOptional wrapper", () => {
     const schema = field.relation("blog", { optional: true });
     const meta = getRelationTarget(schema);
-    assert.deepEqual(meta, { typeId: "blog", multiple: false, optional: true });
+    assert.deepEqual(meta, {
+      typeId: "blog",
+      multiple: false,
+      optional: true,
+      onTargetDelete: "restrict",
+    });
     assert.equal(schema.safeParse(undefined).success, true);
     assert.equal(schema.safeParse("some-slug").success, true);
     assert.equal(schema.safeParse("").success, false);
@@ -22,7 +32,12 @@ describe("field.relation metadata durability", () => {
   it("multiple relation with min/max/optional keeps metadata (the old chained form lost it)", () => {
     const schema = field.relation("glossary", { multiple: true, max: 8, optional: true });
     const meta = getRelationTarget(schema);
-    assert.deepEqual(meta, { typeId: "glossary", multiple: true, optional: true });
+    assert.deepEqual(meta, {
+      typeId: "glossary",
+      multiple: true,
+      optional: true,
+      onTargetDelete: "restrict",
+    });
     assert.equal(schema.safeParse(["a", "b"]).success, true);
     assert.equal(schema.safeParse(Array.from({ length: 9 }, (_, i) => `s${i}`)).success, false);
     assert.equal(schema.safeParse(undefined).success, true);
@@ -57,6 +72,7 @@ describe("introspectSchema relation discovery", () => {
       relationTarget: "author",
       relationMultiple: false,
       relationOptional: false,
+      relationOnTargetDelete: "restrict",
     });
     assert.deepEqual(byPath.get("relatedTerms"), {
       path: ["relatedTerms"],
@@ -64,6 +80,7 @@ describe("introspectSchema relation discovery", () => {
       relationTarget: "glossary",
       relationMultiple: true,
       relationOptional: true,
+      relationOnTargetDelete: "restrict",
     });
     assert.equal(byPath.get("nested.glossarySlug")?.relationTarget, "glossary");
   });
@@ -82,6 +99,7 @@ describe("field.asset metadata durability", () => {
       formats: undefined,
       maxKB: undefined,
       optional: false,
+      onDelete: "delete",
     });
   });
 
@@ -95,6 +113,7 @@ describe("field.asset metadata durability", () => {
       formats: ["webp"],
       maxKB: 150,
       optional: false,
+      onDelete: "delete",
     });
   });
 
@@ -149,6 +168,7 @@ describe("introspectSchema asset discovery", () => {
       assetFormats: ["webp"],
       assetMaxKB: 150,
       assetOptional: false,
+      assetOnDelete: "delete",
     });
     assert.equal(byPath.get("gallery.*.src")?.assetTemplate, "/g/{slug}.webp");
     assert.equal(byPath.get("nested.hero")?.assetOptional, true);

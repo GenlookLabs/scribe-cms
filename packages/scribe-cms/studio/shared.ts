@@ -303,6 +303,35 @@ mark { background: #3a3320; color: var(--stale); border-radius: 3px; padding: 0 
    viewport so the type-badge tooltip escapes that clip. */
 .tree-item .vtip-panel { position: fixed; top: auto; right: auto; }
 
+/* ---- inspector toolbar: prev/next nav + delete ---- */
+.navgroup { display: inline-flex; gap: 2px; margin-left: 6px; }
+.navbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 5px; border: 1px solid var(--border);
+  border-radius: 4px; color: var(--dim); font-size: 14px; line-height: 1; text-decoration: none;
+}
+.navbtn:hover { color: var(--text); background: var(--hover); text-decoration: none; }
+.navbtn.disabled { opacity: 0.35; pointer-events: none; }
+.btn-danger {
+  color: var(--missing); border: 1px solid currentColor; border-radius: 4px; padding: 2px 8px;
+  background: transparent; font: var(--fs-sm) var(--ui); text-decoration: none; cursor: pointer;
+  margin-left: 6px;
+}
+.btn-danger:hover { background: rgba(244,135,113,0.12); text-decoration: none; }
+.btn {
+  color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 4px 12px;
+  background: transparent; font: var(--fs) var(--ui); text-decoration: none; cursor: pointer;
+}
+.btn:hover { background: var(--hover); text-decoration: none; }
+.btn-lg { padding: 6px 16px; font-size: var(--fs); }
+
+/* ---- delete confirmation page ---- */
+.del-page { padding: 0 0 24px; }
+.del-banner { padding: 12px; margin: 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--sidebar); font-size: var(--fs); }
+.del-banner.del-blocked { border-color: var(--missing); color: var(--missing); }
+.del-actions { display: flex; align-items: center; gap: 10px; padding: 16px 12px; }
+.del-actions form { margin: 0; }
+
 /* ---- body raw/preview tabs ---- */
 .bodytabs { margin-left: 8px; font-weight: 400; text-transform: none; }
 .bodytabs a { color: var(--dim); padding: 0 4px; }

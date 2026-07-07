@@ -168,6 +168,19 @@ function buildDocumentFromTranslation(
 
 const DEV_REVALIDATE_MS = 1500;
 
+/**
+ * Package-internal monotonic content version. A mutation that writes/removes
+ * content files (currently only entry deletion) bumps this so every loader
+ * treats its cached document list as stale immediately, bypassing the dev
+ * revalidation window. Not exported from the package's public entrypoint.
+ */
+let contentVersion = 0;
+
+/** Invalidate every content loader's cache after an in-process content mutation. */
+export function bumpContentVersion(): void {
+  contentVersion++;
+}
+
 export function createContentLoader(
   config: ScribeConfig,
   type: ContentTypeConfig,
@@ -176,6 +189,7 @@ export function createContentLoader(
   let cached: AllDocuments | null = null;
   let signature = "";
   let lastCheck = 0;
+  let builtVersion = contentVersion;
   const contentDir = path.join(/* turbopackIgnore: true */ config.rootDir, type.contentDir);
   const storePath = resolveStorePath(config);
   const isProd = process.env.NODE_ENV === "production";
@@ -272,6 +286,15 @@ export function createContentLoader(
 
   return () => {
     if (cached) {
+      // An in-process content mutation (e.g. entry deletion) forces an
+      // unconditional rebuild regardless of prod mode or the dev window.
+      if (contentVersion !== builtVersion) {
+        cached = build();
+        builtVersion = contentVersion;
+        lastCheck = Date.now();
+        signature = isProd ? "" : computeSignature();
+        return cached;
+      }
       if (isProd) return cached;
       const now = Date.now();
       if (now - lastCheck < DEV_REVALIDATE_MS) return cached;
@@ -284,6 +307,7 @@ export function createContentLoader(
     }
     lastCheck = Date.now();
     cached = build();
+    builtVersion = contentVersion;
     signature = isProd ? "" : computeSignature();
     return cached;
   };

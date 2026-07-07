@@ -22,6 +22,7 @@ import {
 } from "./introspect-fields.js";
 import { readImageDimensions, resolveAssetWebPath, statAsset } from "./asset-serve.js";
 import { renderMdxApprox } from "./mdx-preview.js";
+import type { DeletionPlan } from "../src/delete/plan.js";
 
 // ---------------------------------------------------------------------------
 // Validation buckets
@@ -489,6 +490,12 @@ export interface InspectorContext {
   localeTabs: string;
   /** Which body tab to show: raw MDX source (default) or the rendered approximation. */
   bodyView?: "raw" | "preview";
+  /** Previous entry in the collection's default order (null at the start). */
+  prev?: { href: string; slug: string } | null;
+  /** Next entry in the collection's default order (null at the end). */
+  next?: { href: string; slug: string } | null;
+  /** URL of the delete confirmation page for this entry. */
+  deleteHref: string;
 }
 
 export function renderEntryInspector(ctx: InspectorContext): string {
@@ -526,15 +533,35 @@ export function renderEntryInspector(ctx: InspectorContext): string {
 
   const viewOnSite = renderViewOnSite(type, enSlug, locale);
 
+  const prev = ctx.prev ?? null;
+  const next = ctx.next ?? null;
+  const prevBtn = prev
+    ? `<a class="navbtn" id="nav-prev" href="${prev.href}" title="Previous: ${escapeHtml(prev.slug)}">‹</a>`
+    : `<span class="navbtn disabled" title="No previous entry">‹</span>`;
+  const nextBtn = next
+    ? `<a class="navbtn" id="nav-next" href="${next.href}" title="Next: ${escapeHtml(next.slug)}">›</a>`
+    : `<span class="navbtn disabled" title="No next entry">›</span>`;
+  const deleteBtn = `<a class="btn-danger" href="${ctx.deleteHref}">Delete</a>`;
+
+  // The studio's only client-side JS: bind Left/Right arrows to prev/next,
+  // ignoring keystrokes while focus is in a form control.
+  const navScript = `<script>(function(){var p=${JSON.stringify(
+    prev ? prev.href : null,
+  )},n=${JSON.stringify(
+    next ? next.href : null,
+  )};document.addEventListener("keydown",function(e){var a=document.activeElement;if(a){var t=a.tagName;if(t==="INPUT"||t==="TEXTAREA"||t==="SELECT"||a.isContentEditable)return;}if(e.key==="ArrowLeft"&&p){window.location.href=p;}else if(e.key==="ArrowRight"&&n){window.location.href=n;}});})();</script>`;
+
   const toolbar = `<div class="toolbar">
       <a href="/">Overview</a><span class="sep">›</span>
       <a href="/types/${encodePathSegment(type.id)}">${escapeHtml(type.config.label)}</a><span class="sep">›</span>
       <span>${escapeHtml(enSlug)}</span>
       <span class="spacer"></span>
       ${viewOnSite}
+      <span class="navgroup">${prevBtn}${nextBtn}</span>
+      ${deleteBtn}
     </div>`;
 
-  return `${toolbar}
+  return `${toolbar}${navScript}
     <div class="tabs">${ctx.localeTabs}</div>
     ${issuesPanel}
     <div class="section">
@@ -730,6 +757,144 @@ function renderUsedBy(
       <tbody>${rows}</tbody>
     </table>
   </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Deletion confirmation page
+// ---------------------------------------------------------------------------
+
+function entryLink(project: ScribeProject, typeId: string, enSlug: string): string {
+  const href = `/types/${encodePathSegment(typeId)}/${encodePathSegment(enSlug)}`;
+  const label = safeGetType(project, typeId)?.config.label ?? typeId;
+  return `<a href="${href}">${escapeHtml(enSlug)}</a> <span class="dim">${escapeHtml(label)}</span>`;
+}
+
+/**
+ * Render the delete confirmation page: the full plan in sections with counts.
+ * A blocked plan shows the blockers and no confirm button; an executable plan
+ * shows a danger confirm button (POST) plus a cancel link back to the inspector.
+ */
+export function renderDeletionPlanPage(
+  project: ScribeProject,
+  plan: DeletionPlan,
+  options: { typeId: string; enSlug: string; cancelHref: string; postHref: string },
+): string {
+  const root = plan.roots[0];
+  const rootLabel = root
+    ? `${escapeHtml(root.enSlug)}${root.title ? ` <span class="dim">${escapeHtml(root.title)}</span>` : ""}`
+    : escapeHtml(options.enSlug);
+  const blocked = plan.blocked.length > 0;
+
+  const toolbar = `<div class="toolbar">
+      <a href="/">Overview</a><span class="sep">›</span>
+      <a href="/types/${encodePathSegment(options.typeId)}">${escapeHtml(
+        safeGetType(project, options.typeId)?.config.label ?? options.typeId,
+      )}</a><span class="sep">›</span>
+      <a href="${options.cancelHref}">${escapeHtml(options.enSlug)}</a><span class="sep">›</span>
+      <span>delete</span>
+    </div>`;
+
+  const section = (title: string, count: number, body: string): string =>
+    `<div class="section">
+      <div class="section-head">${escapeHtml(title)} <span class="dim">· ${count}</span></div>
+      <div class="section-body">${body}</div>
+    </div>`;
+
+  const emptyRow = (text: string): string => `<p class="dim" style="padding:6px 12px">${escapeHtml(text)}</p>`;
+
+  // Blockers (shown first when present).
+  const blockersBody =
+    plan.blocked.length === 0
+      ? emptyRow("No blockers.")
+      : `<table class="data"><thead><tr><th>Entry</th><th>Field</th><th>Reason</th></tr></thead><tbody>${plan.blocked
+          .map(
+            (b) => `<tr>
+            <td class="mono">${entryLink(project, b.typeId, b.enSlug)}</td>
+            <td class="mono dim">${escapeHtml(b.fieldPath)}</td>
+            <td>${
+              b.reason === "required-single"
+                ? `<span class="vbadge err">required single relation</span>`
+                : `<span class="vbadge err">restrict</span>`
+            }</td>
+          </tr>`,
+          )
+          .join("")}</tbody></table>`;
+
+  // Cascades (roots + transitive deletes shown together for clarity).
+  const rootRow = `<tr>
+      <td class="mono">${entryLink(project, root?.typeId ?? options.typeId, root?.enSlug ?? options.enSlug)}</td>
+      <td class="dim">requested</td>
+    </tr>`;
+  const cascadeRows = plan.cascades
+    .map(
+      (c) => `<tr>
+        <td class="mono">${entryLink(project, c.typeId, c.enSlug)}</td>
+        <td class="mono dim">${escapeHtml(c.via)}</td>
+      </tr>`,
+    )
+    .join("");
+  const deletesBody = `<table class="data"><thead><tr><th>Entry</th><th>Via</th></tr></thead><tbody>${rootRow}${cascadeRows}</tbody></table>`;
+
+  const detachesBody =
+    plan.detaches.length === 0
+      ? emptyRow("Nothing to detach.")
+      : `<table class="data"><thead><tr><th>Entry</th><th>Field</th><th>Drops</th></tr></thead><tbody>${plan.detaches
+          .map(
+            (d) => `<tr>
+            <td class="mono">${entryLink(project, d.typeId, d.enSlug)}</td>
+            <td class="mono dim">${escapeHtml(d.fieldPath)}</td>
+            <td class="mono">${escapeHtml(d.removedSlug)}</td>
+          </tr>`,
+          )
+          .join("")}</tbody></table>`;
+
+  const assetsBody =
+    plan.assets.length === 0
+      ? emptyRow("No asset files.")
+      : `<table class="data"><thead><tr><th>Action</th><th>Path</th></tr></thead><tbody>${plan.assets
+          .map((a) => {
+            const badge =
+              a.action === "delete"
+                ? `<span class="vbadge err">delete</span>`
+                : `<span class="chip nt">keep${a.reason === "shared" ? " (shared)" : ""}</span>`;
+            return `<tr><td>${badge}</td><td class="mono">${escapeHtml(a.path)}</td></tr>`;
+          })
+          .join("")}</tbody></table>`;
+
+  const totalTranslations = plan.store.reduce((sum, s) => sum + s.translations, 0);
+  const totalSnapshots = plan.store.reduce((sum, s) => sum + s.snapshots, 0);
+  const storeBody = `<p style="padding:6px 12px">${totalTranslations} translation row(s) and ${totalSnapshots} EN snapshot(s) across ${plan.store.length} document(s) will be removed from the store.</p>`;
+
+  const deleteCount = plan.roots.length + plan.cascades.length;
+  const assetDeleteCount = plan.assets.filter((a) => a.action === "delete").length;
+
+  const banner = blocked
+    ? `<div class="del-banner del-blocked">This entry cannot be deleted: ${plan.blocked.length} blocker(s) below must be resolved first.</div>`
+    : `<div class="del-banner">Deleting <strong class="mono">${rootLabel}</strong> removes ${deleteCount} document(s) and ${assetDeleteCount} asset file(s). This cannot be undone (git is the safety net).</div>`;
+
+  const actions = blocked
+    ? `<div class="del-actions"><a class="btn" href="${options.cancelHref}">Back to entry</a></div>`
+    : `<div class="del-actions">
+        <form method="post" action="${options.postHref}">
+          <button type="submit" class="btn-danger btn-lg">Delete permanently</button>
+        </form>
+        <a class="btn" href="${options.cancelHref}">Cancel</a>
+      </div>`;
+
+  const sections = [
+    blocked ? section("Blockers", plan.blocked.length, blockersBody) : "",
+    section("Documents deleted", deleteCount, deletesBody),
+    section("References detached", plan.detaches.length, detachesBody),
+    section("Asset files", plan.assets.length, assetsBody),
+    section("Store rows", plan.store.length, storeBody),
+  ].join("");
+
+  return `${toolbar}
+    <div class="del-page">
+      ${banner}
+      ${sections}
+      ${actions}
+    </div>`;
 }
 
 function renderViewOnSite(

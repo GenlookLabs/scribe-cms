@@ -7,6 +7,8 @@ export type {
   AssetField,
   AssetFieldOptions,
   AssetMeta,
+  OnTargetDelete,
+  AssetOnDelete,
 } from "./core/field.js";
 export { getManagedRoots, templateManagedRoot } from "./core/managed-roots.js";
 export {
@@ -96,3 +98,15 @@ export type {
 export { writeStaticRawExports } from "./export/write-static-raw-exports.js";
 export type { WriteStaticRawExportsOptions } from "./export/write-static-raw-exports.js";
 export { serializeMdx } from "./loader/parse-mdx.js";
+export { buildDeletionPlan } from "./delete/plan.js";
+export type {
+  DeletionPlan,
+  DeletionRoot,
+  DeletionCascade,
+  DeletionDetach,
+  DeletionBlocker,
+  DeletionAsset,
+  DeletionStoreCounts,
+} from "./delete/plan.js";
+export { executeDeletionPlan } from "./delete/execute.js";
+export type { ExecuteDeletionResult } from "./delete/execute.js";
