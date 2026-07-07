@@ -1,6 +1,6 @@
 {
   "name": "scribe-cms",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "description": "Typed, file-based CMS for multilingual MDX sites",
   "homepage": "https://scribe.genlook.app",
   "repository": {
@@ -51,7 +51,7 @@
     "build": "tsup && tsc -p tsconfig.dts.json",
     "dev": "tsup --watch",
     "clean": "rm -rf dist",
-    "test": "pnpm build && node --import tsx --test \"src/**/*.test.ts\"",
+    "test": "pnpm build && node --import tsx --test \"src/**/*.test.ts\" \"studio/**/*.test.ts\"",
     "prepublishOnly": "pnpm build",
     "publish:npm": "npm publish --access public"
   },

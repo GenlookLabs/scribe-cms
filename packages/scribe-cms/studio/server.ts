@@ -1,7 +1,17 @@
+import fs from "node:fs";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import type { ContentTypeRuntime, ScribeConfig, ScribeProject } from "../src/core/types.js";
-import { introspectSchema, mergeStructuralOntoLocale } from "../src/core/introspect-schema.js";
+import type {
+  ContentTypeRuntime,
+  ScribeConfig,
+  ScribeDocument,
+  ScribeProject,
+} from "../src/core/types.js";
+import {
+  introspectSchema,
+  isTypeTranslatable,
+  mergeStructuralOntoLocale,
+} from "../src/core/introspect-schema.js";
 import { computePageEnHash } from "../src/hash/page-hash.js";
 import { getTranslatablePayload, readEnDocument } from "../src/loader/create-loader.js";
 import { openStore } from "../src/storage/sqlite.js";
@@ -11,11 +21,33 @@ import {
   getTranslation,
   latestTranslationAtByLocale,
   listTranslationsForLocale,
+  listTranslationsForType,
   type EnSnapshotRow,
 } from "../src/storage/translations.js";
 import { buildWorklist } from "../src/translate/worklist.js";
+import { validateProject } from "../src/validate/validate-project.js";
+import {
+  encodePathSegment as sharedEncodePathSegment,
+  escapeHtml as sharedEscapeHtml,
+  renderLayout as sharedRenderLayout,
+} from "./shared.js";
+import { buildIndexes } from "./introspect-fields.js";
+import {
+  bucketValidation,
+  frontmatterOnlyChip,
+  notTranslatableChip,
+  renderCollectionBrowser,
+  renderEntryInspector,
+  typeBadges,
+  type InspectorContext,
+  type ValidationBuckets,
+} from "./content-views.js";
+import { renderAssetBrowser } from "./asset-views.js";
+import { renderSearchPage } from "./search.js";
+import { contentTypeForPath, resolveAssetWebPath, statAsset } from "./asset-serve.js";
+import { StudioCache, computeContentFingerprint } from "./studio-cache.js";
 
-type DocStatus = "source" | "up-to-date" | "stale" | "missing";
+type DocStatus = "source" | "up-to-date" | "stale" | "missing" | "not-translatable";
 
 interface DocumentStatusResult {
   status: DocStatus;
@@ -23,18 +55,8 @@ interface DocumentStatusResult {
   storedEnHash?: string;
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function encodePathSegment(value: string): string {
-  return encodeURIComponent(value);
-}
+const escapeHtml = sharedEscapeHtml;
+const encodePathSegment = sharedEncodePathSegment;
 
 function statusDot(status: DocStatus): string {
   const labels: Record<DocStatus, string> = {
@@ -42,6 +64,7 @@ function statusDot(status: DocStatus): string {
     "up-to-date": "ok",
     stale: "stale",
     missing: "—",
+    "not-translatable": "n/a",
   };
   return `<span class="status" title="${status}"><span class="dot dot-${status}"></span>${labels[status]}</span>`;
 }
@@ -55,6 +78,11 @@ function documentStatus(
 ): DocumentStatusResult {
   if (locale === config.defaultLocale) {
     return { status: "source" };
+  }
+  // Non-translatable types have no per-locale translation state: report a
+  // neutral "n/a" rather than a red "missing" for every locale.
+  if (!isTypeTranslatable(type.config)) {
+    return { status: "not-translatable" };
   }
   const enDoc = readEnDocument(config, type.config, enSlug);
   if (!enDoc) {
@@ -160,202 +188,19 @@ function renderTranslationSnapshotPanel(
   <details><summary>EN source at translation time</summary>${renderEnSnapshotPreview(snapshot)}</details>`;
 }
 
+/** Thin wrapper over the shared studio layout (adds the Assets nav + type badges). */
 function renderLayout(
   title: string,
   body: string,
   project: ScribeProject,
-  options: { activeTypeId?: string } = {},
+  options: {
+    activeTypeId?: string;
+    activeNav?: string;
+    typeBadges?: Map<string, string>;
+    searchQuery?: string;
+  } = {},
 ): string {
-  const typeLinks = project
-    .listTypes()
-    .map((type) => {
-      const active = type.id === options.activeTypeId ? " active" : "";
-      return `<a class="tree-item${active}" href="/type/${encodePathSegment(type.id)}">
-        <span class="tree-label">${escapeHtml(type.config.label)}</span>
-        <span class="tree-meta">${escapeHtml(type.id)}</span>
-      </a>`;
-    })
-    .join("");
-
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(title)} — Scribe</title>
-  <style>
-    :root {
-      --bg: #1e1e1e;
-      --sidebar: #252526;
-      --bar: #333333;
-      --panel: #1e1e1e;
-      --border: #3c3c3c;
-      --text: #cccccc;
-      --dim: #858585;
-      --accent: #3794ff;
-      --hover: #2a2d2e;
-      --active: #37373d;
-      --ok: #89d185;
-      --stale: #cca700;
-      --missing: #f48771;
-      --source: #75beff;
-      --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
-      --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --fs: 13px;
-      --fs-sm: 11px;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font: var(--fs)/1.4 var(--ui); background: var(--bg); color: var(--text); }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .app { display: flex; height: 100vh; overflow: hidden; }
-
-    /* activity bar */
-    .actbar {
-      width: 48px; flex-shrink: 0; background: var(--bar);
-      display: flex; flex-direction: column; align-items: center;
-      padding: 8px 0; gap: 4px; border-right: 1px solid var(--border);
-    }
-    .actbar a {
-      width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;
-      color: var(--dim); font-size: 18px; text-decoration: none; position: relative;
-    }
-    .actbar a:hover { color: var(--text); }
-    .actbar a.active { color: var(--text); }
-    .actbar a.active::before {
-      content: ""; position: absolute; left: 0; top: 8px; bottom: 8px;
-      width: 2px; background: var(--accent);
-    }
-
-    /* sidebar */
-    .sidebar {
-      width: 200px; flex-shrink: 0; background: var(--sidebar);
-      border-right: 1px solid var(--border); display: flex; flex-direction: column;
-      overflow: hidden;
-    }
-    .sidebar-head {
-      padding: 8px 12px; font-size: var(--fs-sm); font-weight: 600;
-      text-transform: uppercase; letter-spacing: 0.04em; color: var(--dim);
-    }
-    .sidebar-body { flex: 1; overflow-y: auto; padding: 2px 0; }
-    .tree-item {
-      display: flex; flex-direction: column; padding: 3px 12px 3px 20px;
-      color: var(--text); text-decoration: none; line-height: 1.3;
-    }
-    .tree-item:hover { background: var(--hover); text-decoration: none; }
-    .tree-item.active { background: var(--active); }
-    .tree-label { font-size: var(--fs); }
-    .tree-meta { font-size: var(--fs-sm); color: var(--dim); }
-
-    /* main */
-    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-    .toolbar {
-      display: flex; align-items: center; gap: 6px; padding: 0 12px;
-      height: 35px; background: var(--sidebar); border-bottom: 1px solid var(--border);
-      font-size: var(--fs-sm); color: var(--dim); flex-shrink: 0; overflow: hidden;
-    }
-    .toolbar a { color: var(--dim); }
-    .toolbar a:hover { color: var(--text); }
-    .toolbar .sep { color: var(--border); }
-    .content { flex: 1; overflow-y: auto; padding: 0; }
-
-    /* tabs (locale switcher) */
-    .tabs {
-      display: flex; background: var(--sidebar); border-bottom: 1px solid var(--border);
-      overflow-x: auto; flex-shrink: 0;
-    }
-    .tab {
-      display: flex; align-items: center; gap: 6px; padding: 6px 12px;
-      font-size: var(--fs-sm); color: var(--dim); border-right: 1px solid var(--border);
-      text-decoration: none; white-space: nowrap;
-    }
-    .tab:hover { background: var(--hover); color: var(--text); text-decoration: none; }
-    .tab.active {
-      background: var(--bg); color: var(--text);
-      border-bottom: 1px solid var(--bg); margin-bottom: -1px;
-    }
-
-    /* status dots */
-    .status { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-sm); color: var(--dim); }
-    .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-    .dot-source { background: var(--source); }
-    .dot-up-to-date { background: var(--ok); }
-    .dot-stale { background: var(--stale); }
-    .dot-missing { background: var(--missing); opacity: 0.7; }
-
-    /* sections */
-    .section { border-bottom: 1px solid var(--border); }
-    .section-head {
-      padding: 4px 12px; font-size: var(--fs-sm); font-weight: 600;
-      text-transform: uppercase; letter-spacing: 0.04em; color: var(--dim);
-      background: var(--sidebar);
-    }
-    .section-body { padding: 0; }
-
-    /* tables */
-    table { border-collapse: collapse; width: 100%; font-size: var(--fs); }
-    .data th, .data td { padding: 2px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
-    .data th { font-size: var(--fs-sm); font-weight: 600; color: var(--dim); background: var(--sidebar); height: 22px; }
-    .data tr:hover td { background: var(--hover); }
-    .data .mono { font-family: var(--mono); font-size: var(--fs-sm); }
-
-    /* key-value (frontmatter) */
-    .kv td { padding: 1px 12px; font-family: var(--mono); font-size: var(--fs-sm); vertical-align: top; border-bottom: 1px solid var(--border); }
-    .kv .k { width: 160px; color: #9cdcfe; white-space: nowrap; }
-    .kv .v { color: #ce9178; white-space: pre-wrap; word-break: break-word; }
-    .flag { font-size: 9px; font-weight: 700; margin-right: 4px; opacity: 0.5; }
-    .flag.t { color: var(--ok); }
-    .flag.s { color: var(--dim); }
-
-    /* code block */
-    .code {
-      margin: 0; padding: 8px 12px; font: var(--fs-sm)/1.5 var(--mono);
-      white-space: pre-wrap; word-break: break-word; color: var(--text);
-      background: var(--bg); border: none;
-    }
-
-    /* meta row */
-    .meta { display: flex; flex-wrap: wrap; font-size: var(--fs-sm); border-bottom: 1px solid var(--border); padding: 4px 0; }
-    .meta dt { padding: 0 4px 0 12px; color: var(--dim); }
-    .meta dt::after { content: ":"; }
-    .meta dd { padding: 0 12px 0 0; font-family: var(--mono); }
-
-    /* misc */
-    .dim { color: var(--dim); }
-    .page-title { padding: 8px 12px 4px; font-size: 14px; font-weight: 400; }
-    .page-sub { padding: 0 12px 8px; font-size: var(--fs-sm); color: var(--dim); }
-    details summary { cursor: pointer; color: var(--accent); font-size: var(--fs-sm); }
-    details[open] summary { margin-bottom: 4px; }
-    .tag { font-size: var(--fs-sm); color: var(--dim); margin-left: 6px; }
-    .tag-warn { color: var(--stale); }
-    .tag-err { color: var(--missing); }
-
-    /* dashboard */
-    .cards { display: flex; flex-wrap: wrap; gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
-    .card { flex: 1 1 120px; background: var(--bg); padding: 12px; min-width: 120px; }
-    .card-value { font-size: 22px; font-weight: 300; line-height: 1.2; }
-    .card-label { font-size: var(--fs-sm); color: var(--dim); margin-top: 2px; }
-    .bar { display: inline-flex; width: 120px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; vertical-align: middle; margin-right: 8px; }
-    .bar-fill { display: block; height: 100%; }
-  </style>
-</head>
-<body>
-  <div class="app">
-    <nav class="actbar">
-      <a href="/" title="Overview">⌂</a>
-      <a href="/dashboard" title="Dashboard">▦</a>
-      <a href="/staleness" title="Staleness">⚠</a>
-    </nav>
-    <aside class="sidebar">
-      <div class="sidebar-head">Types</div>
-      <div class="sidebar-body">${typeLinks || `<span class="dim" style="padding:8px 12px">—</span>`}</div>
-    </aside>
-    <div class="main">
-      <div class="content">${body}</div>
-    </div>
-  </div>
-</body>
-</html>`;
+  return sharedRenderLayout(title, body, project, options);
 }
 
 function docTitleFromFrontmatter(frontmatter: Record<string, unknown>, enSlug: string): string {
@@ -372,30 +217,138 @@ export async function startStudio(
   const app = new Hono();
   const config = project.config;
 
+  // Back-ref + asset-reference indexes and the validation report are derived
+  // once per content-change tick (a cheap file-count/mtime/store fingerprint)
+  // and served stale-while-revalidate: only the first build blocks a request;
+  // after that a fingerprint change returns the current value immediately and
+  // refreshes in the background. See studio-cache.ts. The validation report
+  // parses every EN + translated MDX body, which is multiple seconds on a large
+  // project — doing it inline made `/types/:id` block for ~5s after any edit.
+  interface StudioCacheValue {
+    backRefs: ReturnType<typeof buildIndexes>["backRefs"];
+    assetRefs: ReturnType<typeof buildIndexes>["assetRefs"];
+    buckets: ValidationBuckets;
+    typeBadges: Map<string, string>;
+  }
+
+  const studioCache = new StudioCache<StudioCacheValue>({
+    fingerprint: () => computeContentFingerprint(project, config),
+    build: () => {
+      const { backRefs, assetRefs } = buildIndexes(project.listTypes());
+      let buckets: ValidationBuckets;
+      try {
+        buckets = bucketValidation(validateProject(config).issues);
+      } catch {
+        buckets = bucketValidation([]);
+      }
+      return { backRefs, assetRefs, buckets, typeBadges: typeBadges(buckets) };
+    },
+    // First-paint placeholder so even the very first request doesn't block on the
+    // multi-second MDX validation pass. Back-refs/badges fill in a moment later.
+    initial: () => {
+      const empty = bucketValidation([]);
+      return {
+        backRefs: new Map(),
+        assetRefs: new Map(),
+        buckets: empty,
+        typeBadges: typeBadges(empty),
+      };
+    },
+    onError: (err) => console.error("[scribe:studio] cache rebuild failed:", err),
+  });
+
+  function getStudioCache(): StudioCacheValue {
+    return studioCache.get();
+  }
+
+  function getTypeSafe(id: string): ContentTypeRuntime | null {
+    try {
+      return project.getType(id);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Batched status-dots renderer for a whole collection page. The per-entry
+   * `documentStatus` re-reads the EN file from disk, re-parses it, re-hashes it,
+   * and issues one point query — per locale (×15 here). For a 600-doc type
+   * that is ~9k disk reads + ~9k queries + ~9k hashes on a single page.
+   *
+   * Instead we do it once per type: pull every translation row for the type in a
+   * single query and index it by (enSlug, locale), and compute each entry's
+   * current EN hash once from the already-cached `type.list()` document (no disk
+   * read). The returned closure is then a pure in-memory lookup per entry.
+   */
+  function batchedStatusDots(
+    db: ReturnType<typeof openStore>,
+    type: ContentTypeRuntime,
+  ): (enSlug: string) => string {
+    // Non-translatable types have no per-locale status; the collection browser
+    // suppresses the status column, so never compute dots for them.
+    if (!isTypeTranslatable(type.config)) return () => "";
+    const targetLocales = config.locales.filter((l) => l !== config.defaultLocale);
+
+    // One query for the whole type; index rows by "enSlug\x00locale".
+    const rowByKey = new Map<string, { en_hash: string }>();
+    for (const row of listTranslationsForType(db, type.id)) {
+      rowByKey.set(`${row.en_slug}\u0000${row.locale}`, { en_hash: row.en_hash });
+    }
+
+    // Current EN hash per entry, computed once from cached docs (no disk read).
+    const enHashBySlug = new Map<string, string>();
+    for (const doc of type.list() as ScribeDocument[]) {
+      const payload = getTranslatablePayload(doc, type.config);
+      enHashBySlug.set(doc.enSlug, computePageEnHash(payload.frontmatter, payload.body));
+    }
+
+    return (enSlug: string): string => {
+      const currentEnHash = enHashBySlug.get(enSlug);
+      return targetLocales
+        .map((locale) => {
+          let status: DocStatus;
+          if (currentEnHash === undefined) {
+            // EN doc not in the cached list (shouldn't happen for a listed entry).
+            status = "missing";
+          } else {
+            const row = rowByKey.get(`${enSlug}\u0000${locale}`);
+            if (!row) status = "missing";
+            else if (row.en_hash !== currentEnHash) status = "stale";
+            else status = "up-to-date";
+          }
+          return statusDot(status);
+        })
+        .join("");
+    };
+  }
+
   app.get("/", (c) => {
     const db = openStore(config, "readonly");
     const worklist = buildWorklist(config);
+    const targetLocaleCount = config.locales.filter((l) => l !== config.defaultLocale).length;
     const rows = project.listTypes().map((type) => {
       const enCount = type.list().length;
-      const localeCells = config.locales
-        .filter((locale) => locale !== config.defaultLocale)
-        .map((locale) => {
-          const translated = listTranslationsForLocale(db, type.id, locale).length;
-          const stale = worklist.filter(
-            (item) =>
-              item.contentType === type.id && item.locale === locale && item.reason === "stale",
-          ).length;
-          const missing = worklist.filter(
-            (item) =>
-              item.contentType === type.id && item.locale === locale && item.reason === "missing",
-          ).length;
-          const tags = [
-            stale ? `<span class="tag tag-warn">${stale}s</span>` : "",
-            missing ? `<span class="tag tag-err">${missing}m</span>` : "",
-          ].join("");
-          return `<td>${translated}${tags}</td>`;
-        })
-        .join("");
+      const localeCells = !isTypeTranslatable(type.config)
+        ? `<td colspan="${targetLocaleCount}" class="dim">${notTranslatableChip()}</td>`
+        : config.locales
+            .filter((locale) => locale !== config.defaultLocale)
+            .map((locale) => {
+              const translated = listTranslationsForLocale(db, type.id, locale).length;
+              const stale = worklist.filter(
+                (item) =>
+                  item.contentType === type.id && item.locale === locale && item.reason === "stale",
+              ).length;
+              const missing = worklist.filter(
+                (item) =>
+                  item.contentType === type.id && item.locale === locale && item.reason === "missing",
+              ).length;
+              const tags = [
+                stale ? `<span class="tag tag-warn">${stale}s</span>` : "",
+                missing ? `<span class="tag tag-err">${missing}m</span>` : "",
+              ].join("");
+              return `<td>${translated}${tags}</td>`;
+            })
+            .join("");
       return `<tr>
         <td><a href="/type/${encodePathSegment(type.id)}">${escapeHtml(type.config.label)}</a></td>
         <td class="dim">${escapeHtml(type.id)}</td>
@@ -495,7 +448,7 @@ export async function startStudio(
           const upToDate = translated - stale;
           const upToDatePct = pct(expected > 0 ? upToDate / expected : 0);
           const stalePct = pct(expected > 0 ? stale / expected : 0);
-          const fallbacks = config.localeFallbacks[locale]?.length
+          const fallbacks = config.localeFallbacks?.[locale]?.length
             ? escapeHtml(config.localeFallbacks[locale]!.join(" → "))
             : `<span class="dim">—</span>`;
           const latest = latestByLocale.get(locale);
@@ -520,12 +473,21 @@ export async function startStudio(
     } else {
       typeRows = types
         .map((type) => {
+          const docs = docCountByType.get(type.id) ?? 0;
+          if (!isTypeTranslatable(type.config)) {
+            return `<tr>
+            <td><a href="/type/${encodePathSegment(type.id)}">${escapeHtml(type.config.label)}</a></td>
+            <td class="dim">${escapeHtml(type.id)}</td>
+            <td>${docs}</td>
+            <td colspan="2">${notTranslatableChip()}</td>
+          </tr>`;
+          }
           const stale = staleByType.get(type.id) ?? 0;
           const missing = missingByType.get(type.id) ?? 0;
           return `<tr>
             <td><a href="/type/${encodePathSegment(type.id)}">${escapeHtml(type.config.label)}</a></td>
             <td class="dim">${escapeHtml(type.id)}</td>
-            <td>${docCountByType.get(type.id) ?? 0}</td>
+            <td>${docs}</td>
             <td>${num(stale, "tag-warn")}</td>
             <td>${num(missing, "tag-err")}</td>
           </tr>`;
@@ -615,7 +577,9 @@ export async function startStudio(
       );
     }
 
-    const localeTabs = config.locales
+    // Non-translatable types have only an EN source — no locale switcher noise.
+    const tabLocales = isTypeTranslatable(type.config) ? config.locales : [config.defaultLocale];
+    const localeTabs = tabLocales
       .map((loc) => {
         const { status } = documentStatus(config, db, type, enSlug, loc);
         const active = loc === locale ? " active" : "";
@@ -628,12 +592,18 @@ export async function startStudio(
     let metaPanel = "";
     let historyPanel = "";
 
+    const bodySection =
+      type.config.body === false
+        ? `<div class="section-head">Body</div>
+        <p class="dim" style="padding:6px 12px">${frontmatterOnlyChip()}</p>`
+        : `<div class="section-head">Body</div>
+        <pre class="code">${escapeHtml(enDoc.content)}</pre>`;
+
     if (locale === config.defaultLocale) {
       contentPanel = `<div class="section">
         <div class="section-head">Frontmatter</div>
         <div class="section-body">${renderFrontmatterTable(enDoc.frontmatter as Record<string, unknown>, type.config.schema)}</div>
-        <div class="section-head">Body</div>
-        <pre class="code">${escapeHtml(enDoc.content)}</pre>
+        ${bodySection}
       </div>`;
     } else {
       const translation = getTranslation(db, typeId, enSlug, locale);
@@ -647,11 +617,16 @@ export async function startStudio(
         const rawToggle = showRaw
           ? `<span class="dim"> · <a href="?locale=${encodePathSegment(locale)}">merged</a></span>`
           : `<span class="dim"> · <a href="?locale=${encodePathSegment(locale)}&raw=1">raw</a></span>`;
+        const translationBodySection =
+          type.config.body === false
+            ? `<div class="section-head">Body</div>
+          <p class="dim" style="padding:6px 12px">${frontmatterOnlyChip()}</p>`
+            : `<div class="section-head">Body</div>
+          <pre class="code">${escapeHtml(translation.body)}</pre>`;
         contentPanel = `<div class="section">
           <div class="section-head">Frontmatter${rawToggle}</div>
           <div class="section-body">${renderFrontmatterTable(displayFrontmatter, type.config.schema)}</div>
-          <div class="section-head">Body</div>
-          <pre class="code">${escapeHtml(translation.body)}</pre>
+          ${translationBodySection}
         </div>`;
         metaPanel = `<dl class="meta">
           <dt>status</dt><dd>${statusDot(status)}</dd>
@@ -727,9 +702,196 @@ export async function startStudio(
     return c.json(matrix);
   });
 
+  // ------------------------------------------------------------------
+  // Content management surfaces (read-only)
+  // ------------------------------------------------------------------
+
+  // Traversal-safe asset preview: maps a web path onto the configured assets
+  // dir and streams the SOURCE file (never the site's publicPath URL).
+  app.get("/asset", (c) => {
+    const webPath = c.req.query("p");
+    if (!webPath) return c.text("missing p", 400);
+    const resolved = resolveAssetWebPath(config, webPath);
+    if (!resolved) return c.text("not found", 404);
+    const info = statAsset(resolved.absPath, webPath);
+    if (!info.exists) return c.text("not found", 404);
+    try {
+      const buf = fs.readFileSync(resolved.absPath);
+      const body = new Uint8Array(buf);
+      return c.body(body, 200, {
+        "Content-Type": contentTypeForPath(webPath),
+        "Cache-Control": "no-cache",
+      });
+    } catch {
+      return c.text("not found", 404);
+    }
+  });
+
+  // Collection browser (table / gallery + field filters).
+  app.get("/types/:typeId", (c) => {
+    const typeId = c.req.param("typeId");
+    const type = getTypeSafe(typeId);
+    const cache = getStudioCache();
+    if (!type) {
+      return c.html(
+        renderLayout("Not found", `<div class="toolbar">Unknown type</div>`, project, {
+          typeBadges: cache.typeBadges,
+        }),
+        404,
+      );
+    }
+    const db = openStore(config, "readonly");
+    // Precompute status dots for the whole page in one query + one hash pass,
+    // then hand the renderer a pure in-memory lookup per entry.
+    const statusDotsFor = batchedStatusDots(db, type);
+    const html = renderCollectionBrowser(
+      {
+        project,
+        config,
+        type,
+        buckets: cache.buckets,
+        statusDots: (_tid, enSlug) => statusDotsFor(enSlug),
+      },
+      (key) => c.req.query(key),
+    );
+    db.close();
+    return c.html(
+      renderLayout(type.config.label, html, project, {
+        activeTypeId: typeId,
+        typeBadges: cache.typeBadges,
+      }),
+    );
+  });
+
+  // Entry inspector.
+  app.get("/types/:typeId/:enSlug", (c) => {
+    const typeId = c.req.param("typeId");
+    const enSlug = c.req.param("enSlug");
+    const locale = c.req.query("locale") ?? config.defaultLocale;
+    const type = getTypeSafe(typeId);
+    const cache = getStudioCache();
+    if (!type) {
+      return c.html(
+        renderLayout("Not found", `<div class="toolbar">Unknown type</div>`, project, {
+          typeBadges: cache.typeBadges,
+        }),
+        404,
+      );
+    }
+    const enDoc = readEnDocument(config, type.config, enSlug);
+    if (!enDoc) {
+      return c.html(
+        renderLayout(
+          "Not found",
+          `<div class="toolbar">Not found</div><p class="dim" style="padding:12px">${escapeHtml(enSlug)}</p>`,
+          project,
+          { activeTypeId: typeId, typeBadges: cache.typeBadges },
+        ),
+        404,
+      );
+    }
+
+    const db = openStore(config, "readonly");
+
+    // Locale tabs reuse the existing status-dot component. Non-translatable types
+    // have only an EN source, so we skip the per-locale tabs entirely.
+    const tabLocales = isTypeTranslatable(type.config) ? config.locales : [config.defaultLocale];
+    const localeTabs = tabLocales
+      .map((loc) => {
+        const { status } = documentStatus(config, db, type, enSlug, loc);
+        const active = loc === locale ? " active" : "";
+        const href = `/types/${encodePathSegment(typeId)}/${encodePathSegment(enSlug)}?locale=${encodePathSegment(loc)}`;
+        return `<a class="tab${active}" href="${href}">${escapeHtml(loc)} ${statusDot(status)}</a>`;
+      })
+      .join("");
+
+    // Merged locale frontmatter (structural from EN + translatable from store).
+    let localeFrontmatter: Record<string, unknown> | null = null;
+    let isFallback = false;
+    if (locale !== config.defaultLocale) {
+      const translation = getTranslation(db, typeId, enSlug, locale);
+      if (translation) {
+        const rawFm = JSON.parse(translation.frontmatter_json) as Record<string, unknown>;
+        localeFrontmatter = mergeStructuralOntoLocale(
+          rawFm,
+          enDoc.frontmatter as Record<string, unknown>,
+          type.config.schema,
+        );
+      } else {
+        isFallback = true;
+      }
+    }
+    db.close();
+
+    const bodyView = c.req.query("body") === "preview" ? "preview" : "raw";
+    const ctx: InspectorContext = {
+      project,
+      config,
+      type,
+      enSlug,
+      locale,
+      enDoc,
+      localeFrontmatter,
+      isFallback,
+      backRefs: cache.backRefs,
+      buckets: cache.buckets,
+      localeTabs,
+      bodyView,
+    };
+    const title = docTitleFromFrontmatter(enDoc.frontmatter as Record<string, unknown>, enSlug);
+    return c.html(
+      renderLayout(title, renderEntryInspector(ctx), project, {
+        activeTypeId: typeId,
+        typeBadges: cache.typeBadges,
+      }),
+    );
+  });
+
+  // Global full-text search (EN content).
+  app.get("/search", (c) => {
+    const q = c.req.query("q") ?? "";
+    const cache = getStudioCache();
+    const html = renderSearchPage(project, q);
+    return c.html(
+      renderLayout("Search", html, project, {
+        activeNav: "search",
+        typeBadges: cache.typeBadges,
+        searchQuery: q,
+      }),
+    );
+  });
+
+  // Asset browser.
+  app.get("/assets", (c) => {
+    const cache = getStudioCache();
+    const html = renderAssetBrowser(config, cache.assetRefs);
+    return c.html(
+      renderLayout("Assets", html, project, {
+        activeNav: "assets",
+        typeBadges: cache.typeBadges,
+      }),
+    );
+  });
+
   const port = options.port ?? 3600;
   const host = options.host ?? "127.0.0.1";
   serve({ fetch: app.fetch, port, hostname: host }, () => {
     console.log(`Scribe studio listening on http://${host}:${port}`);
+    // Warm the derived-data cache (back-refs, asset graph, validation report)
+    // and every content loader at boot, off the request path. The full build
+    // parses ~all EN docs and validates every MDX body — multiple seconds on a
+    // large project. Without this, that cost is scheduled by the *first* request
+    // and, running synchronously on the event loop, blocks whichever request
+    // arrives next (observed: a ~4s stall on the second navigation). Priming it
+    // here means the build has usually finished before the first click, so
+    // navigations are warm. Fire-and-forget: `studioCache.get()` returns the
+    // placeholder immediately and schedules the real build via its own
+    // scheduler, which also calls `type.list()` for every type and so warms all
+    // loaders. Errors surface through the cache's `onError`.
+    try {
+      studioCache.get();
+    } catch (err) {
+      console.error("[scribe:studio] boot warm-up failed:", err);
+    }
   });
 }

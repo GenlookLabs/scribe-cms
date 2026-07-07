@@ -71,6 +71,9 @@ on every type without declaring them. Redirects live in `content/<type>/_redirec
   Constraints go in the options (not chained Zod methods):
   `field.relation("glossary", { multiple: true, max: 8, optional: true })`.
   Validated by `scribe validate`, dereferenced with `related()`.
+- `field.asset(options?)` — a file reference (web path into `assets.dir`):
+  `field.asset({ dir: "/try-on/garments", formats: ["webp"], maxKB: 150 })`.
+  Validated by `scribe validate`, resolved to a served URL at load time.
 
 ### 3. Read content
 
