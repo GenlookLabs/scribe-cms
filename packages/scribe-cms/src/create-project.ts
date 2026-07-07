@@ -78,7 +78,7 @@ function buildRuntime(
         load(),
         type,
         config.localeRouting,
-        config.localeFallbacks[locale] ?? [],
+        config.localeFallbacks?.[locale] ?? [],
       );
       if (result.document && type.path) {
         return {
@@ -101,7 +101,7 @@ function buildRuntime(
       const params: StaticParam[] = [];
       for (const locale of options.locales ?? config.locales) {
         const localeIdx = all.get(locale);
-        const fallbacks = config.localeFallbacks[locale] ?? [];
+        const fallbacks = config.localeFallbacks?.[locale] ?? [];
         for (const doc of enIdx.bySlug.values()) {
           let slug: string;
           if (locale === config.defaultLocale) {

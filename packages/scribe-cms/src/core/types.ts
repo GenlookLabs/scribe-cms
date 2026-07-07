@@ -205,8 +205,8 @@ export interface ScribeConfig {
   defaultLocale: string;
   localeRouting: LocaleRoutingConfig;
   localePresets?: LocalePresets;
-  /** Fallback chains derived from locale tags (`{}` when the feature is disabled). */
-  localeFallbacks: LocaleFallbacks;
+  /** Fallback chains derived from locale tags (`{}` when the feature is disabled). `resolveConfig` always populates this; optional so hand-built config literals can omit it. */
+  localeFallbacks?: LocaleFallbacks;
   translate?: ScribeTranslateDefaults;
   types: ContentTypeConfig[];
 }
