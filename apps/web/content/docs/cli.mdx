@@ -39,7 +39,7 @@ Translates missing and stale pages with Gemini (needs `GEMINI_API_KEY`). Run wit
 | `--resume` | - | Check pending batch jobs, ingest finished ones, submit nothing new. |
 | `--concurrency <n>` | `3` | Parallel translation requests (direct mode only). |
 | `--model <id>` | `gemini-3.1-pro` | Gemini model override. |
-| `--dry-run` | - | Print the worklist without calling the API or writing. |
+| `--dry-run` | - | Print the worklist without calling the API or writing, with an estimated token count and USD cost per item and in the totals. |
 | `--force` | - | Re-translate even when the English hash matches. |
 | `--no-progress` | - | Plain line-by-line logs instead of the live progress UI. |
 

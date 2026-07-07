@@ -22,10 +22,10 @@ export const LOCALE_NAMES: Record<string, string> = {
 
 export function defaultLocalizationPrompt(localeName: string, locale: string): string {
   return [
-    `Localize the content above into natural ${localeName} (${locale}).`,
-    "Do not translate word-for-word.",
-    "Preserve the source tone and brand voice.",
-    "Write as if a native speaker authored it for the target market.",
+    `Write the content above in natural ${localeName} (${locale}), as if it had been originally authored by a native ${localeName} copywriter for that market.`,
+    `Preserve the source tone and brand voice, but express every idea the way ${localeName} copy actually reads — never word-for-word.`,
+    `Use native ${localeName} typographic conventions for quotation marks, apostrophes, and spacing around punctuation — not the source language's.`,
+    `Before returning, re-read each ${localeName} sentence on its own: if it is ambiguous, unidiomatic, or reads like a translation, rewrite it.`,
   ].join(" ");
 }
 
@@ -46,8 +46,12 @@ export function buildLocalizationPrompt(
  * of a given page, enabling Gemini implicit prefix caching. The locale-specific
  * localization directive lives in the SUFFIX, after the EN body.
  */
-const TASK_FRAMING =
-  "You are localizing the content below into a target language specified at the end of this prompt.";
+const TASK_FRAMING = [
+  "You are a native-speaker marketing copywriter producing the localized edition of the content below. The target language is specified at the end of this prompt.",
+  "You are NOT translating a document. Each sentence in the source tells you the INTENT — what it must make the reader feel or understand. Write copy that accomplishes the same thing, the way a native copywriter would have written it from scratch.",
+  "Never mirror the source sentence structure when the target language would naturally phrase the idea differently. Calqued syntax is the #1 failure mode.",
+  "When the source uses wordplay, an idiom, or a punchy rhetorical device, recreate the effect rather than the words. If no natural equivalent exists, write a plain, confident line that carries the same message — never a literal rendering that sounds odd or ambiguous in the target language.",
+].join("\n");
 
 /**
  * Describe the expected JSON keys. Mirrors buildGeminiResponseSchema: types

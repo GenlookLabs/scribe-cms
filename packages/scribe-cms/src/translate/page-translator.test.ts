@@ -12,7 +12,13 @@ import { getTranslation } from "../storage/translations.js";
 import { usageFromResponse } from "./gemini-client.js";
 import { textFromBatchResponse } from "./gemini-batch.js";
 import { estimateTranslationCostUsd } from "./gemini-pricing.js";
-import { finalizeTranslation, type PreparedTranslation } from "./page-translator.js";
+import {
+  finalizeTranslation,
+  translatePage,
+  translateWorklist,
+  type PreparedTranslation,
+  type TranslateProgressEvent,
+} from "./page-translator.js";
 import type { TranslationWorkItem } from "./worklist.js";
 
 const blogSchema = z.object({
@@ -148,6 +154,98 @@ describe("finalizeTranslation (shared direct/batch post-processing)", () => {
 
     assert.equal(result.failed, true);
     assert.ok(result.error);
+  });
+});
+
+/**
+ * A fixture backed by a real EN doc on disk so the dry-run path runs through
+ * prepareTranslation (prompt + payload) end to end.
+ */
+function makeDryRunFixture() {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "scribe-dryrun-test-"));
+  const type: ContentTypeConfig = {
+    id: "blog",
+    schema: blogSchema,
+    contentDir: "blog",
+    label: "Blog",
+    slugStrategy: "localized",
+    indexFallback: "none",
+  };
+  const config: ScribeConfig = {
+    rootDir: tmpDir,
+    storePath: path.join(tmpDir, "store.sqlite"),
+    locales: ["en", "fr", "ru"],
+    defaultLocale: "en",
+    localeRouting: { strategy: "path-prefix" },
+    types: [type],
+  };
+  const contentDir = path.join(tmpDir, "blog");
+  fs.mkdirSync(contentDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(contentDir, "hello-world.mdx"),
+    `---\ntitle: Hello world\n---\n\nHello, this is the body.`,
+    "utf8",
+  );
+  openStore(config, "readwrite").close();
+  const item: TranslationWorkItem = {
+    contentType: "blog",
+    enSlug: "hello-world",
+    locale: "fr",
+    reason: "missing",
+    currentEnHash: "hash-1",
+  };
+  return { config, item };
+}
+
+describe("dry-run usage estimate", () => {
+  it("carries a non-zero token + cost estimate on a single-page dry run", async () => {
+    const { config, item } = makeDryRunFixture();
+
+    const result = await translatePage(config, item, { dryRun: true });
+
+    assert.equal(result.skipped, false);
+    assert.equal(result.failed, undefined);
+    assert.ok(result.usage);
+    assert.ok(result.usage.inputTokens > 0);
+    assert.ok(result.usage.outputTokens > 0);
+    assert.ok(result.estimatedCostUsd !== undefined && result.estimatedCostUsd > 0);
+  });
+
+  it("prices a batch dry run at half the interactive rate and aggregates totals", async () => {
+    const { config, item } = makeDryRunFixture();
+
+    const capture = () => {
+      let totals: TranslateProgressEvent | undefined;
+      const onProgress = (event: TranslateProgressEvent) => {
+        if (event.type === "done") totals = event;
+      };
+      return { onProgress, get: () => totals };
+    };
+
+    const batchCap = capture();
+    const [batch] = await translateWorklist(config, [item], {
+      dryRun: true,
+      mode: "batch",
+      onProgress: batchCap.onProgress,
+    });
+    const [direct] = await translateWorklist(config, [item], {
+      dryRun: true,
+      mode: "direct",
+    });
+
+    assert.ok(batch?.usage && direct?.usage);
+    // Same tokens either way — only the price differs by mode.
+    assert.equal(batch.usage.inputTokens, direct.usage.inputTokens);
+    assert.equal(batch.usage.outputTokens, direct.usage.outputTokens);
+    assert.ok(batch.estimatedCostUsd && direct.estimatedCostUsd);
+    assert.equal(batch.estimatedCostUsd, direct.estimatedCostUsd * 0.5);
+
+    // Totals in the done event aggregate the per-item estimate.
+    const done = batchCap.get();
+    assert.ok(done && done.type === "done");
+    assert.equal(done.totals.inputTokens, batch.usage.inputTokens);
+    assert.equal(done.totals.outputTokens, batch.usage.outputTokens);
+    assert.equal(done.totals.estimatedCostUsd, batch.estimatedCostUsd);
   });
 });
 

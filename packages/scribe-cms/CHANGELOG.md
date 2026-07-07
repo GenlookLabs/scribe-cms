@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.22 — 2026-07-07
+
+### Changed
+
+- Rewrote the built-in translation prompt around transcreation. The model is framed as a native-speaker copywriter producing the localized edition of the content: it carries the intent of each sentence instead of mirroring source syntax, recreates wordplay and idioms rather than rendering them literally, applies native typographic conventions (quotation marks, apostrophes, punctuation spacing), and re-reads every sentence to rewrite anything that sounds like a translation. The locale directive stays in the prompt suffix, so the shared prefix remains byte-identical across locales for prompt caching. Existing translations are not re-staled by the prompt change; use `scribe translate --force` to regenerate them.
+
+### Fixed
+
+- `scribe translate --dry-run` always reported $0. Dry-run items now include an estimated token count and cost derived from the actual prompt length and EN payload size, with the batch discount applied when running with `--batch`.
+
 ## 0.0.21 — 2026-07-07
 
 ### Changed

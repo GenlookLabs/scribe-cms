@@ -9,6 +9,11 @@ import {
   submitBatchJobPlan,
 } from "./batch-worklist.js";
 import { translatePageWithGemini } from "./gemini-client.js";
+import {
+  estimateDryRunUsage,
+  estimateTranslationCostUsd,
+  type TranslationCostMode,
+} from "./gemini-pricing.js";
 import { normalizeGeminiDisplayName, resolveGeminiModelId } from "./gemini-models.js";
 import {
   baseForItem,
@@ -53,6 +58,41 @@ async function runPool<T>(
 
 function labelForItem(item: TranslationWorkItem): string {
   return `${item.contentType}/${item.enSlug}@${item.locale}`;
+}
+
+/**
+ * Build the result for a dry-run item: no model call is made, so token usage and
+ * cost are estimated from the prepared prompt + translatable payload. `costMode`
+ * is the run's actual mode so batch dry-runs reflect the 50% batch rate.
+ */
+function dryRunResult(
+  prepared: PreparedTranslation,
+  costMode: TranslationCostMode,
+  startedAt: number,
+): TranslatePageResult {
+  const estimate = estimateDryRunUsage({
+    prompt: prepared.prompt,
+    translatableFrontmatter: prepared.payload.frontmatter,
+    enBody: prepared.payload.body,
+  });
+  const usage = {
+    ...estimate,
+    thoughtsTokens: 0,
+    totalTokens: estimate.inputTokens + estimate.outputTokens,
+  };
+  return {
+    ...baseForItem(prepared.item),
+    skipped: false,
+    model: prepared.model,
+    usage,
+    estimatedCostUsd: estimateTranslationCostUsd(
+      displayModelFor(prepared),
+      estimate.inputTokens,
+      estimate.outputTokens,
+      costMode,
+    ),
+    durationMs: Date.now() - startedAt,
+  };
 }
 
 /**
@@ -202,12 +242,7 @@ export async function translatePage(
   const prepared = outcome.prepared;
 
   if (options.dryRun) {
-    return {
-      ...baseForItem(item),
-      skipped: false,
-      model: prepared.model,
-      durationMs: Date.now() - startedAt,
-    };
+    return dryRunResult(prepared, "interactive", startedAt);
   }
 
   try {
@@ -297,18 +332,14 @@ export async function translateWorklist(
       model: options.model,
       mode,
     });
+    const costMode: TranslationCostMode = mode === "batch" ? "batch" : "interactive";
     const results = items.map((item) => {
       const itemStartedAt = Date.now();
       try {
         const outcome = prepareTranslation(config, item, options, itemStartedAt);
         return outcome.status === "done"
           ? outcome.result
-          : {
-              ...baseForItem(item),
-              skipped: false,
-              model: outcome.prepared.model,
-              durationMs: Date.now() - itemStartedAt,
-            };
+          : dryRunResult(outcome.prepared, costMode, itemStartedAt);
       } catch (error) {
         return failedResultForItem(item, error, itemStartedAt);
       }

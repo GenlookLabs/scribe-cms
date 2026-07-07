@@ -51,6 +51,27 @@ export function estimateTranslationCostUsd(
   );
 }
 
+/**
+ * Rough token estimate for a dry run, where no model call is made. Both figures
+ * are heuristics, not measurements:
+ *   - inputTokens ≈ prompt characters / 4 (the usual ~4 chars/token ratio).
+ *   - outputTokens ≈ (translatable payload characters / 4) × 1.5: the translated
+ *     output is roughly the source length; the 1.5 factor covers thinking tokens
+ *     at thinkingLevel LOW plus JSON wrapping.
+ * Observed range: 2.7k-token-input pages produced 2.3k–7.9k output tokens.
+ */
+export function estimateDryRunUsage(input: {
+  prompt: string;
+  translatableFrontmatter: unknown;
+  enBody: string;
+}): { inputTokens: number; outputTokens: number } {
+  const payloadChars = JSON.stringify(input.translatableFrontmatter).length + input.enBody.length;
+  return {
+    inputTokens: Math.ceil(input.prompt.length / 4),
+    outputTokens: Math.ceil((payloadChars / 4) * 1.5),
+  };
+}
+
 export function formatTokenCount(tokens: number): string {
   if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(2)}M`;
   if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k`;
