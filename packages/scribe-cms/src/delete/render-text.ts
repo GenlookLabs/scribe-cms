@@ -53,6 +53,16 @@ export function renderDeletionPlanText(plan: DeletionPlan): string {
     `Store rows: ${totalTranslations} translation(s), ${totalSnapshots} snapshot(s) across ${plan.store.length} document(s).`,
   );
 
+  if (plan.bodyRefWarnings.length > 0) {
+    lines.push("");
+    lines.push(
+      `Body references (${plan.bodyRefWarnings.length}): these will dangle and become validation errors:`,
+    );
+    for (const w of plan.bodyRefWarnings) {
+      lines.push(`  ${w.typeId}/${w.enSlug} body -> ${w.targetTypeId}/${w.targetEnSlug}`);
+    }
+  }
+
   if (plan.blocked.length > 0) {
     lines.push("");
     lines.push(`Blockers (${plan.blocked.length}):`);

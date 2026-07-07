@@ -7,6 +7,7 @@ import {
   type SchemaFieldMeta,
 } from "../src/core/introspect-schema.js";
 import { collectImagePaths } from "../src/validate/validate-assets.js";
+import { extractInlineTokens } from "../src/inline/tokens.js";
 import type { ContentTypeRuntime, ScribeDocument } from "../src/core/types.js";
 
 /**
@@ -191,6 +192,8 @@ interface RelationScanInput {
   enSlug: string;
   frontmatter: Record<string, unknown>;
   relationFields: SchemaFieldMeta[];
+  /** MDX body, scanned for `${{relation:...}}` inline tokens. */
+  body?: string;
 }
 
 /**
@@ -213,6 +216,19 @@ export function buildBackRefIndex(inputs: RelationScanInput[]): BackRefIndex {
         }
       } else if (typeof value === "string" && value) {
         pushBackRef(index, target, value, ref);
+      }
+    }
+
+    // Body relation tokens (`${{relation:type:slug}}`, both URL and slug modes)
+    // register as back-refs with a `body` field label.
+    if (input.body) {
+      for (const token of extractInlineTokens(input.body).tokens) {
+        if (token.kind !== "relation") continue;
+        pushBackRef(index, token.targetTypeId, token.enSlug, {
+          typeId: input.typeId,
+          enSlug: input.enSlug,
+          field: "body",
+        });
       }
     }
   }
@@ -314,6 +330,18 @@ export function buildAssetRefIndex(inputs: AssetScanInput[]): AssetRefIndex {
         });
       }
     }
+    // Body asset tokens (`${{asset:/path}}`) are declared references — they name
+    // an exact web path, unlike the heuristic image-path scan below.
+    for (const token of extractInlineTokens(input.body).tokens) {
+      if (token.kind !== "asset") continue;
+      declaredPaths.add(token.webPath);
+      pushAssetRef(index, token.webPath, {
+        typeId: input.typeId,
+        enSlug: input.enSlug,
+        field: "body",
+        declared: true,
+      });
+    }
     // Heuristic pass (body + frontmatter image-looking strings). Skip paths
     // already captured as declared to avoid double reporting the same file.
     for (const webPath of collectImagePaths(input.frontmatter, input.body)) {
@@ -351,14 +379,15 @@ export function buildIndexes(types: ContentTypeRuntime[]): {
     const docs = type.list() as ScribeDocument[];
     for (const doc of docs) {
       const frontmatter = doc.frontmatter as Record<string, unknown>;
-      if (relationFields.length > 0) {
-        relationInputs.push({
-          typeId: type.id,
-          enSlug: doc.enSlug,
-          frontmatter,
-          relationFields,
-        });
-      }
+      // Push for every doc (not only those with relation fields): a body may
+      // hold `${{relation:...}}` tokens even when the schema declares none.
+      relationInputs.push({
+        typeId: type.id,
+        enSlug: doc.enSlug,
+        frontmatter,
+        relationFields,
+        body: doc.content,
+      });
       assetInputs.push({
         typeId: type.id,
         enSlug: doc.enSlug,

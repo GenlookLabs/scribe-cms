@@ -12,7 +12,7 @@ import {
   isTypeTranslatable,
   mergeStructuralOntoLocale,
 } from "../src/core/introspect-schema.js";
-import { computePageEnHash } from "../src/hash/page-hash.js";
+import { computeTranslationEnHash } from "../src/hash/page-hash.js";
 import { getTranslatablePayload, readEnDocument } from "../src/loader/create-loader.js";
 import { openStore } from "../src/storage/sqlite.js";
 import {
@@ -39,6 +39,7 @@ import {
   renderCollectionBrowser,
   renderDeletionPlanPage,
   renderEntryInspector,
+  renderUsedBy,
   typeBadges,
   type InspectorContext,
   type ValidationBuckets,
@@ -47,7 +48,10 @@ import { renderAssetBrowser } from "./asset-views.js";
 import { buildDeletionPlan, isPlanBlocked, type DeletionPlan } from "../src/delete/plan.js";
 import { executeDeletionPlan } from "../src/delete/execute.js";
 import { renderSearchPage } from "./search.js";
-import { contentTypeForPath, resolveAssetWebPath, statAsset } from "./asset-serve.js";
+import { contentTypeForPath, resolveAssetWebPath, serveStudioAsset, statAsset } from "./asset-serve.js";
+import { extractInlineTokens } from "../src/inline/tokens.js";
+import { buildPreviewTokens, makeDocExists } from "./preview-tokens.js";
+import { renderMdxApprox } from "./mdx-preview.js";
 import { StudioCache, computeContentFingerprint } from "./studio-cache.js";
 
 type DocStatus = "source" | "up-to-date" | "stale" | "missing" | "not-translatable";
@@ -72,6 +76,19 @@ function statusDot(status: DocStatus): string {
   return `<span class="status" title="${status}"><span class="dot dot-${status}"></span>${labels[status]}</span>`;
 }
 
+function bodyToggleFor(locale: string, showRaw: boolean, preview: boolean): string {
+  const q = (withPreview: boolean) => {
+    const parts = [`locale=${encodePathSegment(locale)}`];
+    if (showRaw) parts.push("raw=1");
+    if (withPreview) parts.push("body=preview");
+    return "?" + parts.join("&");
+  };
+  return `<span class="bodytabs">
+      <a href="${q(false)}" class="${preview ? "" : "active"}">Raw</a>
+      <a href="${q(true)}" class="${preview ? "active" : ""}">Preview</a>
+    </span>`;
+}
+
 function documentStatus(
   config: ScribeConfig,
   db: ReturnType<typeof openStore>,
@@ -92,7 +109,7 @@ function documentStatus(
     return { status: "missing" };
   }
   const payload = getTranslatablePayload(enDoc, type.config);
-  const currentEnHash = computePageEnHash(payload.frontmatter, payload.body);
+  const currentEnHash = computeTranslationEnHash(payload.frontmatter, payload.body);
   const row = getTranslation(db, type.id, enSlug, locale);
   if (!row) {
     return { status: "missing", currentEnHash };
@@ -302,7 +319,7 @@ export async function startStudio(
     const enHashBySlug = new Map<string, string>();
     for (const doc of type.list() as ScribeDocument[]) {
       const payload = getTranslatablePayload(doc, type.config);
-      enHashBySlug.set(doc.enSlug, computePageEnHash(payload.frontmatter, payload.body));
+      enHashBySlug.set(doc.enSlug, computeTranslationEnHash(payload.frontmatter, payload.body));
     }
 
     return (enSlug: string): string => {
@@ -563,6 +580,8 @@ export async function startStudio(
     const enSlug = c.req.param("enSlug");
     const locale = c.req.query("locale") ?? config.defaultLocale;
     const showRaw = c.req.query("raw") === "1";
+    const bodyView = c.req.query("body") === "preview" ? "preview" : "raw";
+    const docExists = makeDocExists(project, config);
     const type = project.getType(typeId);
     if (!type) {
       return c.html(renderLayout("Not found", `<div class="toolbar">Unknown type</div>`, project), 404);
@@ -595,12 +614,20 @@ export async function startStudio(
     let metaPanel = "";
     let historyPanel = "";
 
+    const enTokens = extractInlineTokens(enDoc.content);
+    const enPv = buildPreviewTokens(enTokens.tokens, {
+      enFrontmatter: enDoc.frontmatter as Record<string, unknown>,
+      docExists,
+    });
+    const enBodyInner =
+      bodyView === "preview"
+        ? `<div class="mdx-preview">${renderMdxApprox(enTokens.placeholderBody, enPv)}</div>`
+        : `<pre class="code">${escapeHtml(enDoc.content)}</pre>`;
     const bodySection =
       type.config.body === false
         ? `<div class="section-head">Body</div>
         <p class="dim" style="padding:6px 12px">${frontmatterOnlyChip()}</p>`
-        : `<div class="section-head">Body</div>
-        <pre class="code">${escapeHtml(enDoc.content)}</pre>`;
+        : `<div class="section-head">Body ${bodyToggleFor(locale, false, bodyView === "preview")}</div>${enBodyInner}`;
 
     if (locale === config.defaultLocale) {
       contentPanel = `<div class="section">
@@ -620,12 +647,20 @@ export async function startStudio(
         const rawToggle = showRaw
           ? `<span class="dim"> · <a href="?locale=${encodePathSegment(locale)}">merged</a></span>`
           : `<span class="dim"> · <a href="?locale=${encodePathSegment(locale)}&raw=1">raw</a></span>`;
+        const trTokens = extractInlineTokens(enDoc.content).tokens;
+        const trPv = buildPreviewTokens(trTokens, {
+          enFrontmatter: enDoc.frontmatter as Record<string, unknown>,
+          docExists,
+        });
+        const trBodyInner =
+          bodyView === "preview"
+            ? `<div class="mdx-preview">${renderMdxApprox(translation.body, trPv)}</div>`
+            : `<pre class="code">${escapeHtml(translation.body)}</pre>`;
         const translationBodySection =
           type.config.body === false
             ? `<div class="section-head">Body</div>
           <p class="dim" style="padding:6px 12px">${frontmatterOnlyChip()}</p>`
-            : `<div class="section-head">Body</div>
-          <pre class="code">${escapeHtml(translation.body)}</pre>`;
+            : `<div class="section-head">Body ${bodyToggleFor(locale, showRaw, bodyView === "preview")}</div>${trBodyInner}`;
         contentPanel = `<div class="section">
           <div class="section-head">Frontmatter${rawToggle}</div>
           <div class="section-body">${renderFrontmatterTable(displayFrontmatter, type.config.schema)}</div>
@@ -655,6 +690,9 @@ export async function startStudio(
     db.close();
 
     const title = docTitleFromFrontmatter(enDoc.frontmatter as Record<string, unknown>, enSlug);
+    // Back-refs (frontmatter relations + body ${{relation:...}} tokens) are
+    // locale-independent, so the panel shows on every tab.
+    const usedByPanel = renderUsedBy(project, typeId, enSlug, getStudioCache().backRefs);
     const html = `<div class="toolbar">
         <a href="/">Overview</a><span class="sep">›</span>
         <a href="/type/${encodePathSegment(typeId)}">${escapeHtml(type.config.label)}</a><span class="sep">›</span>
@@ -663,6 +701,7 @@ export async function startStudio(
       <div class="tabs">${localeTabs}</div>
       ${metaPanel}
       ${contentPanel}
+      ${usedByPanel}
       ${historyPanel}`;
 
     return c.html(renderLayout(title, html, project, { activeTypeId: typeId }));
@@ -969,6 +1008,17 @@ export async function startStudio(
         typeBadges: cache.typeBadges,
       }),
     );
+  });
+
+  app.get("/*", (c) => {
+    const asset = serveStudioAsset(config, c.req.path);
+    if (!asset) {
+      return c.html(renderLayout("Not found", `<div class="toolbar">Not found</div>`, project), 404);
+    }
+    return c.body(asset.body, 200, {
+      "Content-Type": asset.contentType,
+      "Cache-Control": "no-cache",
+    });
   });
 
   const port = options.port ?? 3600;

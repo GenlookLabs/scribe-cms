@@ -1,12 +1,15 @@
 import { escapeHtml } from "./shared.js";
+import type { PreviewToken } from "./preview-tokens.js";
+import { unescapeInlineTokens } from "../src/inline/tokens.js";
 
 /**
  * Rendered MDX *approximation* for the read-only studio (step 5 of the content
  * management spec). This is a sanity-check preview for humans, NOT a real MDX
  * pipeline: it never executes JSX, never resolves imports, and never emits real
- * anchors (hrefs are site paths that would 404 inside the studio). It renders
- * common Markdown + GFM constructs and shows unknown JSX components as labeled
- * boxes with their props and (recursively rendered) children.
+ * site anchors for plain paths (hrefs are site paths that would 404 inside the
+ * studio). It renders common Markdown + GFM constructs, shows JSX blocks as raw
+ * escaped source, and resolves inline-token markers when preview metadata is
+ * supplied.
  *
  * Safety: everything that ends up as text is escaped. Structural markers (JSX
  * tags, code fences, table pipes) are parsed from the raw source, but their text
@@ -14,11 +17,27 @@ import { escapeHtml } from "./shared.js";
  * a try/catch that falls back to a preformatted escaped block, so malformed input
  * degrades gracefully instead of throwing.
  */
-export function renderMdxApprox(body: string): string {
+
+let activeTokens: PreviewToken[] = [];
+
+const TOKEN_SENTINEL_RE = /\u0000T(\d+)\u0000/g;
+
+function tokenSentinel(n: number): string {
+  return `\u0000T${n}\u0000`;
+}
+
+export function renderMdxApprox(markerBody: string, tokens: PreviewToken[] = []): string {
+  activeTokens = tokens;
   try {
-    return renderBlocks(body).trim();
+    const unescaped = unescapeInlineTokens(markerBody);
+    const withSentinels = unescaped.replace(/%%(\d+)%%/g, (m, n: string) => {
+      const idx = Number(n);
+      return idx >= 1 && idx <= tokens.length ? tokenSentinel(idx) : m;
+    });
+    const rendered = renderBlocks(withSentinels).trim();
+    return rendered.replace(TOKEN_SENTINEL_RE, (_m, n: string) => standaloneToken(tokens[Number(n) - 1]));
   } catch {
-    return `<pre class="mdx-fallback">${escapeHtml(body)}</pre>`;
+    return `<pre class="mdx-fallback">${escapeHtml(markerBody)}</pre>`;
   }
 }
 
@@ -64,12 +83,11 @@ function renderBlocks(src: string): string {
 
     // JSX component block (capitalized tag name).
     if (/^\s*<[A-Z]/.test(line)) {
-      const jsx = tryRenderJsx(lines, i);
+      const jsx = findJsxBlock(lines, i);
       if (jsx) {
-        out.push(jsx.html);
+        out.push(renderJsxRaw(jsx.raw));
         i = jsx.next;
       } else {
-        // Unparseable JSX: fall back to a preformatted escaped line, never crash.
         out.push(`<pre class="mdx-fallback">${escapeHtml(line)}</pre>`);
         i++;
       }
@@ -190,32 +208,21 @@ function renderTable(header: string[], rows: string[][]): string {
 }
 
 // ---------------------------------------------------------------------------
-// JSX component blocks
+// JSX component blocks (raw source)
 // ---------------------------------------------------------------------------
 
-/**
- * Attempt to render a top-level JSX component block starting at line `start`.
- * Handles self-closing (`<C ... />`) and paired (`<C ...>children</C>`) forms,
- * possibly spanning multiple lines. Returns the rendered box + the next line
- * index to resume from, or `null` when the block cannot be parsed (the caller
- * then emits a preformatted fallback for the opening line).
- */
-function tryRenderJsx(lines: string[], start: number): { html: string; next: number } | null {
+function findJsxBlock(lines: string[], start: number): { raw: string; next: number } | null {
   const rest = lines.slice(start).join("\n");
   const open = /^\s*<([A-Z][A-Za-z0-9]*)((?:\{[^}]*\}|"[^"]*"|'[^']*'|[^>])*?)(\/?)>/.exec(rest);
   if (!open) return null;
 
   const name = open[1]!;
-  const attrs = open[2]!;
   const selfClose = open[3] === "/";
-  const propsHtml = renderProps(attrs);
-
   if (selfClose) {
-    const next = start + countNewlines(open[0]!) + 1;
-    return { html: jsxBox(name, propsHtml, ""), next };
+    const consumed = open[0]!;
+    return { raw: consumed.replace(/^\s+/, ""), next: start + countNewlines(consumed) + 1 };
   }
 
-  // Find the matching close tag, honoring nesting of same-named components.
   const afterOpen = open[0]!.length;
   const tokenRe = new RegExp(`<${name}\\b|</${name}>`, "g");
   tokenRe.lastIndex = afterOpen;
@@ -233,37 +240,48 @@ function tryRenderJsx(lines: string[], start: number): { html: string; next: num
       depth++;
     }
   }
-  if (closeEnd === -1) return null; // unbalanced → fallback
+  if (closeEnd === -1) return null;
 
-  const closeTag = `</${name}>`;
-  const children = rest.slice(afterOpen, closeEnd - closeTag.length);
-  const next = start + countNewlines(rest.slice(0, closeEnd)) + 1;
-  const childHtml = children.trim() ? renderBlocks(children.trim()) : "";
-  return { html: jsxBox(name, propsHtml, childHtml), next };
+  const raw = rest.slice(0, closeEnd).replace(/^\s+/, "");
+  return { raw, next: start + countNewlines(rest.slice(0, closeEnd)) + 1 };
 }
 
-function renderProps(attrs: string): string {
-  const props: string[] = [];
-  const re = /([A-Za-z_][\w-]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|\{([^}]*)\}))?/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(attrs)) !== null) {
-    const key = m[1]!;
-    const val = m[2] ?? m[3] ?? m[4];
-    if (val === undefined) {
-      props.push(`<span class="mdx-prop"><span class="k">${escapeHtml(key)}</span></span>`);
-    } else {
-      props.push(
-        `<span class="mdx-prop"><span class="k">${escapeHtml(key)}</span>=<span class="v">${escapeHtml(val)}</span></span>`,
-      );
+function renderJsxRaw(raw: string): string {
+  const escaped = escapeHtml(raw).replace(TOKEN_SENTINEL_RE, (_m, n: string) => {
+    const pt = activeTokens[Number(n) - 1];
+    if (!pt) return "";
+    const rawLabel = escapeHtml(pt.raw);
+    if (pt.kind === "relation") {
+      if (pt.dangling) return `<span class="mdx-relation-broken">${rawLabel}</span>`;
+      return `<a class="mdx-relation-link" href="${escapeHtml(pt.studioUrl ?? "")}">${rawLabel}</a>`;
     }
-  }
-  if (props.length === 0) return "";
-  return `<div class="mdx-jsx-props">${props.join("")}</div>`;
+    return rawLabel;
+  });
+  return `<pre class="mdx-jsx-raw"><code>${escaped}</code></pre>`;
 }
 
-function jsxBox(name: string, propsHtml: string, childHtml: string): string {
-  const children = childHtml ? `<div class="mdx-jsx-children">${childHtml}</div>` : "";
-  return `<div class="mdx-jsx"><div class="mdx-jsx-head">${escapeHtml(name)}</div>${propsHtml}${children}</div>`;
+// ---------------------------------------------------------------------------
+// Token resolution helpers
+// ---------------------------------------------------------------------------
+
+function resolveSentinelDest(dest: string): string {
+  const m = /^\u0000T(\d+)\u0000$/.exec(dest);
+  if (!m) return dest;
+  const pt = activeTokens[Number(m[1]) - 1];
+  if (!pt) return dest;
+  if (pt.kind === "relation") return pt.studioUrl ?? "";
+  return pt.value ?? "";
+}
+
+function standaloneToken(pt: PreviewToken | undefined): string {
+  if (!pt) return "";
+  if (pt.kind === "relation") {
+    if (pt.dangling) {
+      return `<span class="mdx-relation-broken" title="missing target">${escapeHtml(pt.label ?? "")}</span>`;
+    }
+    return `<a class="mdx-relation-chip" href="${escapeHtml(pt.studioUrl ?? "")}">${escapeHtml(pt.label ?? "")}</a>`;
+  }
+  return escapeHtml(pt.value ?? "");
 }
 
 // ---------------------------------------------------------------------------
@@ -286,11 +304,23 @@ function renderInline(text: string): string {
     return `\u0000${codes.length - 1}\u0000`;
   });
 
-  // Links → styled spans (NOT real anchors; hrefs are site paths that 404 here).
-  s = s.replace(
-    /\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
-    (_all, label: string, href: string) => `<span class="mdx-link" title="${href}">${label}</span>`,
-  );
+  s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (_all, alt: string, dest: string) => {
+    const src = resolveSentinelDest(dest);
+    return `<img class="mdx-img" src="${escapeHtml(src)}" alt="${alt}" loading="lazy" />`;
+  });
+
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (_all, label: string, dest: string) => {
+    const sm = /^\u0000T(\d+)\u0000$/.exec(dest);
+    if (sm) {
+      const pt = activeTokens[Number(sm[1]) - 1];
+      if (pt && pt.kind === "relation") {
+        if (pt.dangling) return `<span class="mdx-relation-broken" title="missing target">${label}</span>`;
+        return `<a class="mdx-relation-link" href="${escapeHtml(pt.studioUrl ?? "")}">${label}</a>`;
+      }
+      if (pt) return `<span class="mdx-link" title="${escapeHtml(pt.value ?? "")}">${label}</span>`;
+    }
+    return `<span class="mdx-link" title="${escapeHtml(dest)}">${label}</span>`;
+  });
 
   // Bold, then italic.
   s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");

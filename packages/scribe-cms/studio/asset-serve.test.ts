@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { resolveAssetWebPath } from "./asset-serve.js";
+import { contentTypeForPath, resolveAssetWebPath, serveStudioAsset } from "./asset-serve.js";
 import type { ScribeConfig } from "../src/core/types.js";
 
 const ASSETS = "/tmp/scribe-studio-assets";
@@ -77,5 +79,40 @@ describe("resolveAssetWebPath (traversal safety)", () => {
     // /tmp/scribe-studio-assets-evil must not count as inside /tmp/scribe-studio-assets
     const r = resolveAssetWebPath(config, "/../scribe-studio-assets-evil/x.png");
     assert.equal(r, null);
+  });
+});
+
+describe("serveStudioAsset", () => {
+  it("returns video/mp4 for .mp4 paths", () => {
+    assert.equal(contentTypeForPath("/clips/intro.mp4"), "video/mp4");
+  });
+
+  it("returns body bytes and content type for an existing file", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "scribe-asset-serve-"));
+    const assetsDir = path.join(root, "assets");
+    fs.mkdirSync(assetsDir);
+    fs.writeFileSync(path.join(assetsDir, "a.webp"), "RIFF----WEBPVP8 ");
+    const config = configWithAssets(assetsDir);
+    const result = serveStudioAsset(config, "/a.webp");
+    assert.ok(result);
+    assert.equal(result!.contentType, "image/webp");
+    assert.ok(result!.body.length > 0);
+  });
+
+  it("returns null for a missing file", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "scribe-asset-serve-"));
+    const assetsDir = path.join(root, "assets");
+    fs.mkdirSync(assetsDir);
+    const config = configWithAssets(assetsDir);
+    assert.equal(serveStudioAsset(config, "/missing.webp"), null);
+  });
+
+  it("returns null for a traversal path that escapes the assets dir", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "scribe-asset-serve-"));
+    const assetsDir = path.join(root, "assets");
+    fs.mkdirSync(assetsDir);
+    fs.writeFileSync(path.join(root, "secret"), "nope");
+    const config = configWithAssets(assetsDir);
+    assert.equal(serveStudioAsset(config, "/../secret"), null);
   });
 });

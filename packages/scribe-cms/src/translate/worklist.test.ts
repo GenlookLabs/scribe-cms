@@ -6,7 +6,7 @@ import path from "node:path";
 import { z } from "zod";
 import { field } from "../core/field.js";
 import type { ContentTypeConfig, ScribeConfig } from "../core/types.js";
-import { computePageEnHash } from "../hash/page-hash.js";
+import { computePageEnHash, computeTranslationEnHash } from "../hash/page-hash.js";
 import { getTranslatablePayload, readEnDocument } from "../loader/create-loader.js";
 import { recordEnSnapshot } from "../history/record-snapshot.js";
 import { openStore } from "../storage/sqlite.js";
@@ -182,5 +182,110 @@ describe("buildWorklist", () => {
       new Set(items.map((item) => item.contentType)),
       new Set(["vertical", "platform"]),
     );
+  });
+});
+
+describe("buildWorklist inline-token staleness", () => {
+  const blog: ContentTypeConfig = {
+    id: "blog",
+    schema,
+    contentDir: "blog",
+    label: "Blog",
+    slugStrategy: "fixed",
+    indexFallback: "none",
+    path: "/blog/{slug}",
+  };
+
+  /** Fresh project + a single blog EN doc whose body carries inline tokens. */
+  function setup(body: string, vars?: Record<string, string>): ScribeConfig & { tmpDir: string } {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "scribe-worklist-tok-"));
+    fs.mkdirSync(path.join(tmpDir, "blog"), { recursive: true });
+    const varsBlock = vars
+      ? `vars:\n${Object.entries(vars)
+          .map(([k, v]) => `  ${k}: ${v}`)
+          .join("\n")}\n`
+      : "";
+    fs.writeFileSync(
+      path.join(tmpDir, "blog", "hello.mdx"),
+      `---\ntitle: Hello\n${varsBlock}---\n\n${body}`,
+      "utf8",
+    );
+    const config: ScribeConfig = {
+      rootDir: tmpDir,
+      storePath: path.join(tmpDir, "store.sqlite"),
+      locales: ["en", "fr"],
+      defaultLocale: "en",
+      localeRouting: { strategy: "path-prefix" },
+      types: [blog],
+    };
+    openStore(config, "readwrite").close();
+    return Object.assign(config, { tmpDir });
+  }
+
+  /** Store a fr translation whose en_hash matches what prepareTranslation would write. */
+  function storeFreshTranslation(config: ScribeConfig): void {
+    const enDoc = readEnDocument(config, blog, "hello")!;
+    const payload = getTranslatablePayload(enDoc, blog);
+    const hash = computeTranslationEnHash(payload.frontmatter, payload.body);
+    const db = openStore(config, "readwrite");
+    const snapshotId = recordEnSnapshot(
+      config,
+      {
+        contentType: "blog",
+        enSlug: "hello",
+        enHash: hash,
+        frontmatter: payload.frontmatter,
+        body: payload.body,
+      },
+      db,
+    );
+    upsertTranslation(db, {
+      contentType: "blog",
+      enSlug: "hello",
+      locale: "fr",
+      slug: "hello",
+      frontmatter: { title: "Bonjour" },
+      body: "Corps %%1%%.",
+      enHash: hash,
+      translatedAt: new Date().toISOString(),
+      model: "test",
+      snapshotId,
+    });
+    db.close();
+  }
+
+  /** Overwrite the EN body (frontmatter stays `title: Hello`, no vars). */
+  function rewriteBody(config: ScribeConfig, body: string): void {
+    fs.writeFileSync(
+      path.join(config.rootDir, "blog", "hello.mdx"),
+      `---\ntitle: Hello\n---\n\n${body}`,
+      "utf8",
+    );
+  }
+
+  it("a doc with an inline token is NOT reported stale after a prepare-time upsert", () => {
+    const config = setup("Read ${{relation:blog:hello}} now.");
+    storeFreshTranslation(config);
+    const items = buildWorklist(config, { locales: ["fr"] });
+    assert.equal(items.length, 0, JSON.stringify(items));
+  });
+
+  it("changing only a token's value keeps the translation fresh", () => {
+    const config = setup("Read ${{relation:blog:hello}} now.");
+    storeFreshTranslation(config);
+    // Swap the relation target: the placeholder body is unchanged, so the hash
+    // (and staleness) must not move.
+    rewriteBody(config, "Read ${{relation:blog:other}} now.");
+    const items = buildWorklist(config, { locales: ["fr"] });
+    assert.equal(items.length, 0, JSON.stringify(items));
+  });
+
+  it("adding a second token IS reported stale", () => {
+    const config = setup("Read ${{relation:blog:hello}} now.");
+    storeFreshTranslation(config);
+    rewriteBody(config, "Read ${{relation:blog:hello}} and ${{relation:blog:two}} now.");
+    const items = buildWorklist(config, { locales: ["fr"] });
+    assert.equal(items.length, 1);
+    assert.equal(items[0]!.reason, "stale");
   });
 });

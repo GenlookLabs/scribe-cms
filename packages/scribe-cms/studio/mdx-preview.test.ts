@@ -1,6 +1,23 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { extractInlineTokens } from "../src/inline/tokens.js";
 import { renderMdxApprox } from "./mdx-preview.js";
+import { buildPreviewTokens } from "./preview-tokens.js";
+
+function preview(
+  body: string,
+  opts: {
+    enFrontmatter?: Record<string, unknown>;
+    docExists?: (typeId: string, enSlug: string) => boolean;
+  } = {},
+): string {
+  const { placeholderBody, tokens } = extractInlineTokens(body);
+  const pv = buildPreviewTokens(tokens, {
+    enFrontmatter: opts.enFrontmatter ?? {},
+    docExists: opts.docExists ?? (() => true),
+  });
+  return renderMdxApprox(placeholderBody, pv);
+}
 
 describe("renderMdxApprox", () => {
   it("renders ATX headings", () => {
@@ -52,21 +69,20 @@ describe("renderMdxApprox", () => {
     assert.match(html, /<pre class="mdx-code" data-lang="ts"><code>const x = 1 &lt; 2;<\/code><\/pre>/);
   });
 
-  it("renders a JSX component as a labeled box with props and children", () => {
+  it("renders a JSX component as raw escaped source", () => {
     const md = `<Callout type="info" dismissable>\n\nHello **world**\n\n</Callout>`;
     const html = renderMdxApprox(md);
-    assert.match(html, /<div class="mdx-jsx-head">Callout<\/div>/);
-    assert.match(html, /<span class="k">type<\/span>=<span class="v">info<\/span>/);
-    assert.match(html, /<span class="k">dismissable<\/span>/);
-    assert.match(html, /<div class="mdx-jsx-children">/);
-    assert.match(html, /<strong>world<\/strong>/);
+    assert.match(html, /<pre class="mdx-jsx-raw"><code>/);
+    assert.match(html, /&lt;Callout type=&quot;info&quot; dismissable&gt;/);
+    assert.match(html, /Hello \*\*world\*\*/);
+    assert.doesNotMatch(html, /mdx-jsx-head/);
+    assert.doesNotMatch(html, /mdx-jsx-props/);
   });
 
-  it("renders a self-closing JSX component", () => {
+  it("renders a self-closing JSX component as raw escaped source", () => {
     const html = renderMdxApprox(`<Divider spacing="lg" />`);
-    assert.match(html, /<div class="mdx-jsx-head">Divider<\/div>/);
-    assert.match(html, /<span class="k">spacing<\/span>=<span class="v">lg<\/span>/);
-    assert.doesNotMatch(html, /mdx-jsx-children/);
+    assert.match(html, /<pre class="mdx-jsx-raw"><code>&lt;Divider spacing=&quot;lg&quot; \/&gt;<\/code><\/pre>/);
+    assert.doesNotMatch(html, /mdx-jsx-head/);
   });
 
   it("keeps <script> injection escaped, never emitting a raw tag", () => {
@@ -75,16 +91,76 @@ describe("renderMdxApprox", () => {
     assert.doesNotMatch(html, /<script>/);
   });
 
-  it("escapes JSX prop values and children (no injected markup)", () => {
+  it("escapes JSX prop values and children in raw blocks (no injected markup)", () => {
     const html = renderMdxApprox(`<Box label="<b>x</b>">\n<img onerror="hack">\n</Box>`);
     assert.doesNotMatch(html, /<b>x<\/b>/);
     assert.doesNotMatch(html, /<img onerror/);
     assert.match(html, /&lt;b&gt;x&lt;\/b&gt;/);
+    assert.match(html, /mdx-jsx-raw/);
   });
 
   it("falls back without throwing on malformed JSX", () => {
     assert.doesNotThrow(() => renderMdxApprox("<Foo bar={unclosed\n\nmore text"));
     const html = renderMdxApprox("<Unclosed>\nno closing tag here");
     assert.equal(typeof html, "string");
+  });
+
+  it("renders a relation token in a markdown link dest as a studio anchor", () => {
+    const html = preview("[label](${{relation:glossary:foo}})");
+    assert.match(
+      html,
+      /<a class="mdx-relation-link" href="\/type\/glossary\/doc\/foo">label<\/a>/,
+    );
+  });
+
+  it("renders a standalone relation token as a chip link", () => {
+    const html = preview("See ${{relation:glossary:foo}}.");
+    assert.match(
+      html,
+      /<a class="mdx-relation-chip" href="\/type\/glossary\/doc\/foo">foo<\/a>/,
+    );
+  });
+
+  it("renders a dangling relation as broken, without a live href", () => {
+    const html = preview("[label](${{relation:glossary:foo}})", { docExists: () => false });
+    assert.match(html, /<span class="mdx-relation-broken" title="missing target">label<\/span>/);
+    assert.doesNotMatch(html, /<a class="mdx-relation-link"/);
+  });
+
+  it("renders an asset token in an image dest", () => {
+    const html = preview("![alt](${{asset:/img/x.webp}})");
+    assert.match(html, /<img class="mdx-img" src="\/img\/x\.webp" alt="alt"/);
+  });
+
+  it("renders a plain markdown image with a root-relative path", () => {
+    const html = renderMdxApprox("![a](/glossary-images/x.webp)");
+    assert.match(html, /<img class="mdx-img" src="\/glossary-images\/x\.webp" alt="a"/);
+  });
+
+  it("renders a static token as its resolved value", () => {
+    const html = preview('Price: ${{static:"$9"}}.');
+    assert.match(html, /Price: \$9\./);
+    assert.doesNotMatch(html, /\$\{\{/);
+  });
+
+  it("renders a var token from enFrontmatter.vars", () => {
+    const html = preview("CTA: ${{var:cta}}.", { enFrontmatter: { vars: { cta: "Shop now" } } });
+    assert.match(html, /CTA: Shop now\./);
+  });
+
+  it("renders a JSX block with a slug-mode relation prop as raw source with a relation link", () => {
+    const html = preview('<E slug="${{relation:glossary:foo:slug}}" />');
+    assert.match(html, /<pre class="mdx-jsx-raw"><code>/);
+    assert.match(html, /&lt;E slug=&quot;/);
+    assert.match(
+      html,
+      /<a class="mdx-relation-link" href="\/type\/glossary\/doc\/foo">\$\{\{relation:glossary:foo:slug\}\}<\/a>/,
+    );
+  });
+
+  it("leaves a malformed token verbatim and escaped, not swallowed", () => {
+    const html = renderMdxApprox("Bad: ${{bogus}} here.");
+    assert.match(html, /\$\{\{bogus\}\}/);
+    assert.doesNotMatch(html, /mdx-relation/);
   });
 });

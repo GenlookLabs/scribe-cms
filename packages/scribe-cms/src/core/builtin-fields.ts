@@ -20,6 +20,13 @@ export interface BuiltinEnFields {
   noindex: boolean;
   /** Set only when explicitly provided in EN frontmatter. */
   canonicalPathOverride?: string;
+  /**
+   * Reserved `vars` map: an optional `Record<string, string>` any entry may
+   * carry WITHOUT declaring it in the type schema. Read by `${{var:key}}` inline
+   * tokens; never translated (it is not a schema field). Kept verbatim (even
+   * when malformed) so `scribe validate` can flag a non-string-record shape.
+   */
+  vars?: Record<string, string>;
 }
 
 export interface BuiltinParseIssue {
@@ -133,12 +140,22 @@ export function extractBuiltinEnFields(
     }
   }
 
+  // Reserved `vars` map: pulled out before Zod validation so a schema (strict or
+  // not) never rejects or strips it. Kept verbatim — even a malformed value —
+  // so the inline-token validation pass can report a bad shape.
+  let vars: Record<string, string> | undefined;
+  if (rest.vars !== undefined) {
+    vars = rest.vars as Record<string, string>;
+    delete rest.vars;
+  }
+
   return {
     builtin: {
       publishedAt,
       updatedAt,
       noindex,
       canonicalPathOverride,
+      vars,
     },
     rest,
     issues,
@@ -193,7 +210,7 @@ export function mergeBuiltinsIntoFrontmatter(
   doc: Pick<
     ScribeDocument,
     "publishedAt" | "updatedAt" | "noindex" | "canonicalPathOverride" | "slug" | "locale"
-  >,
+  > & { vars?: Record<string, string> },
   type: Pick<ContentTypeConfig, "path">,
   defaultLocale: string,
   localeRouting?: LocaleRoutingConfig,
@@ -203,6 +220,9 @@ export function mergeBuiltinsIntoFrontmatter(
   if (doc.updatedAt !== undefined) out.updatedAt = doc.updatedAt;
   out.noindex = doc.noindex;
   out.canonicalPath = resolveCanonicalPathname(type, doc, defaultLocale, localeRouting);
+  // The reserved `vars` map rides only on EN documents (its single source of
+  // truth); locale documents read it from their EN parent at token-fill time.
+  if (doc.vars !== undefined) out.vars = doc.vars;
   return out;
 }
 

@@ -363,6 +363,14 @@ mark { background: #3a3320; color: var(--stale); border-radius: 3px; padding: 0 
 .mdx-preview .mdx-jsx-props .k { color: #9cdcfe; }
 .mdx-preview .mdx-jsx-props .v { color: #ce9178; }
 .mdx-preview .mdx-jsx-children { padding: 4px 8px; }
+.mdx-preview .mdx-jsx-raw { background: var(--sidebar); border: 1px solid var(--border); border-radius: 4px; margin: 8px 0; padding: 8px 12px; overflow-x: auto; }
+.mdx-preview .mdx-jsx-raw code { font: var(--fs-sm)/1.5 var(--mono); color: var(--dim); white-space: pre; }
+.mdx-preview .mdx-img { max-width: 100%; height: auto; display: block; border-radius: 4px; margin: 8px 0; }
+.mdx-preview .mdx-relation-link { color: var(--accent); text-decoration: none; }
+.mdx-preview .mdx-relation-link:hover { text-decoration: underline; }
+.mdx-preview .mdx-relation-chip { display: inline-block; padding: 0 6px; border-radius: 3px; background: var(--active); color: var(--accent); text-decoration: none; font-size: var(--fs-sm); }
+.mdx-preview .mdx-relation-chip:hover { text-decoration: underline; }
+.mdx-preview .mdx-relation-broken { display: inline-block; padding: 0 6px; border-radius: 3px; background: rgba(244,135,113,0.12); color: var(--missing); text-decoration: line-through; font-size: var(--fs-sm); }
 `;
 
 /** Render the shared studio chrome (activity bar + type sidebar + content). */

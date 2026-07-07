@@ -23,6 +23,11 @@ import type {
 import { openStore, resolveStorePath } from "../storage/sqlite.js";
 import { listTranslationsForType } from "../storage/translations.js";
 import { prepareTranslatedMdxBody } from "../translate/validate-mdx-body.js";
+import {
+  fillTranslatedInlineBody,
+  substituteEnInlineBody,
+  type InlineResolver,
+} from "../inline/resolve-tokens.js";
 import { isPublishableContentFile, normalizeEnFrontmatter } from "./normalize-en.js";
 import { resolveDocumentAssets } from "./resolve-assets.js";
 
@@ -94,6 +99,7 @@ export function parseEnMdx(
       updatedAt: builtin.updatedAt,
       noindex: builtin.noindex,
       canonicalPathOverride: builtin.canonicalPathOverride,
+      vars: builtin.vars,
       slug,
       locale: config.defaultLocale,
     },
@@ -141,6 +147,7 @@ function buildDocumentFromTranslation(
   enDoc: ScribeDocument,
   type: ContentTypeConfig,
   config: ScribeConfig,
+  inlineResolver?: InlineResolver,
 ): ScribeDocument {
   const localeFm = JSON.parse(row.frontmatter_json) as Record<string, unknown>;
   const merged = mergeStructuralOntoLocale(localeFm, enDoc.frontmatter, type.schema);
@@ -153,6 +160,20 @@ function buildDocumentFromTranslation(
     config.localeRouting,
   );
 
+  // The stored body carries `%%n%%` markers. When token substitution is enabled
+  // (runtime read path only) fill them from the CURRENT EN body's tokens,
+  // resolved for this locale; otherwise leave the raw markers in place.
+  const preparedBody = prepareTranslatedMdxBody(row.body).body;
+  const content = inlineResolver
+    ? fillTranslatedInlineBody(
+        preparedBody,
+        enDoc.content,
+        enDoc.frontmatter as Record<string, unknown>,
+        row.locale,
+        inlineResolver,
+      )
+    : preparedBody;
+
   return {
     slug: row.slug,
     enSlug: row.en_slug,
@@ -162,7 +183,7 @@ function buildDocumentFromTranslation(
     noindex: seo.noindex,
     canonicalPathOverride: seo.canonicalPathOverride,
     frontmatter,
-    content: prepareTranslatedMdxBody(row.body).body,
+    content,
   };
 }
 
@@ -184,7 +205,7 @@ export function bumpContentVersion(): void {
 export function createContentLoader(
   config: ScribeConfig,
   type: ContentTypeConfig,
-  options: { resolveAssets?: boolean } = {},
+  options: { resolveAssets?: boolean; inlineResolver?: InlineResolver } = {},
 ): () => AllDocuments {
   let cached: AllDocuments | null = null;
   let signature = "";
@@ -201,6 +222,21 @@ export function createContentLoader(
     assets && options.resolveAssets ? listAssetFields(type.schema) : [];
   const resolveAssets = (doc: ScribeDocument): void => {
     if (assetFields.length > 0 && assets) resolveDocumentAssets(doc, assetFields, assets);
+  };
+
+  // Inline-token substitution is a runtime read-path concern (createScribe only),
+  // gated exactly like asset resolution: the CLI, validation, and studio keep raw
+  // token syntax so they can introspect and re-hash source bodies.
+  const inlineResolver = options.inlineResolver;
+  const resolveEnInline = (doc: ScribeDocument): void => {
+    if (inlineResolver) {
+      doc.content = substituteEnInlineBody(
+        doc.content,
+        doc.frontmatter as Record<string, unknown>,
+        config.defaultLocale,
+        inlineResolver,
+      );
+    }
   };
 
   function computeSignature(): string {
@@ -270,7 +306,7 @@ export function createContentLoader(
         if (!enDoc) continue;
         // Merge structural (incl. asset) fields from the *unresolved* EN source,
         // then resolve the locale doc's own fresh frontmatter.
-        const doc = buildDocumentFromTranslation(row, enDoc, type, config);
+        const doc = buildDocumentFromTranslation(row, enDoc, type, config, inlineResolver);
         resolveAssets(doc);
         bySlug.set(doc.slug, doc);
         byEnSlug.set(row.en_slug, doc);
@@ -278,8 +314,12 @@ export function createContentLoader(
       out.set(locale, { bySlug, byEnSlug });
     }
 
-    // Resolve EN docs last: locale docs merged from their unresolved frontmatter above.
-    for (const doc of englishBySlug.values()) resolveAssets(doc);
+    // Resolve EN docs last: locale docs merged from their unresolved frontmatter
+    // above, and translated bodies extract tokens from the still-raw EN content.
+    for (const doc of englishBySlug.values()) {
+      resolveAssets(doc);
+      resolveEnInline(doc);
+    }
 
     return out;
   }

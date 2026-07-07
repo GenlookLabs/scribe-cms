@@ -10,6 +10,7 @@ import type {
 } from "./core/types.js";
 import { listRelationFields, type SchemaFieldMeta } from "./core/introspect-schema.js";
 import { createContentLoader } from "./loader/create-loader.js";
+import { createInlineResolver, type InlineResolver } from "./inline/resolve-tokens.js";
 import { resolveLocalizedDocument } from "./i18n/resolve-document.js";
 import { createUrlBuilder, isRoutableType } from "./i18n/build-url.js";
 
@@ -33,9 +34,12 @@ function buildRuntime(
   config: ScribeConfig,
   type: ContentTypeConfig,
   getRuntime: (id: string) => ContentTypeRuntime,
-  options: { resolveAssets?: boolean } = {},
+  options: { resolveAssets?: boolean; inlineResolver?: InlineResolver } = {},
 ): ContentTypeRuntime {
-  const load = createContentLoader(config, type, { resolveAssets: options.resolveAssets });
+  const load = createContentLoader(config, type, {
+    resolveAssets: options.resolveAssets,
+    inlineResolver: options.inlineResolver,
+  });
   const relationFields = new Map<string, SchemaFieldMeta>(
     listRelationFields(type.schema)
       .filter((f) => f.path.length === 1)
@@ -214,11 +218,15 @@ function buildRuntime(
  * @param options.resolveAssets resolve declared asset fields to served URLs on
  *   read (publicPath applied, templates materialized). Only `createScribe` sets
  *   this; the CLI, validation, and static exports keep source values.
+ * @param options.resolveInlineTokens substitute `${{...}}` inline tokens in
+ *   document bodies on read (EN tokens filled in place, translated `%%n%%`
+ *   markers filled from the current EN tokens). Only `createScribe` sets this;
+ *   the CLI, validation, and studio keep raw token syntax.
  * @internal
  */
 export function createProject(
   config: ScribeConfig,
-  options: { resolveAssets?: boolean } = {},
+  options: { resolveAssets?: boolean; resolveInlineTokens?: boolean } = {},
 ): ScribeProject {
   const runtimes = new Map<string, ContentTypeRuntime>();
   const getRuntime = (id: string): ContentTypeRuntime => {
@@ -229,8 +237,21 @@ export function createProject(
     return runtime;
   };
 
+  // One resolver instance shared across every type's loader. It reads localized
+  // slugs straight from the store (never through another loader), so building it
+  // here cannot recurse into the runtimes it lives alongside.
+  const inlineResolver = options.resolveInlineTokens
+    ? createInlineResolver(config)
+    : undefined;
+
   for (const type of config.types) {
-    runtimes.set(type.id, buildRuntime(config, type, getRuntime, options));
+    runtimes.set(
+      type.id,
+      buildRuntime(config, type, getRuntime, {
+        resolveAssets: options.resolveAssets,
+        inlineResolver,
+      }),
+    );
   }
 
   return {

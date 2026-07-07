@@ -3,7 +3,7 @@ import path from "node:path";
 import type { ContentTypeConfig, ScribeConfig } from "../core/types.js";
 import { isTypeTranslatable } from "../core/introspect-schema.js";
 import { isPublishableContentFile } from "../loader/normalize-en.js";
-import { computePageEnHash } from "../hash/page-hash.js";
+import { computeTranslationEnHash } from "../hash/page-hash.js";
 import { getTranslatablePayload, readEnDocument } from "../loader/create-loader.js";
 import { openStore } from "../storage/sqlite.js";
 import { getTranslation } from "../storage/translations.js";
@@ -85,7 +85,7 @@ export function buildWorklist(config: ScribeConfig, options: WorklistOptions = {
       const enDoc = readEnDocument(config, type, enSlug);
       if (!enDoc) continue;
       const payload = getTranslatablePayload(enDoc, type);
-      const currentEnHash = computePageEnHash(payload.frontmatter, payload.body);
+      const currentEnHash = computeTranslationEnHash(payload.frontmatter, payload.body);
 
       for (const locale of locales) {
         if (locale === config.defaultLocale) continue;

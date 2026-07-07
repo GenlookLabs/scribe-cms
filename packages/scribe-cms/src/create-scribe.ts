@@ -23,7 +23,7 @@ export function createScribe<const TTypes extends readonly ContentTypeInput<any>
   input: ScribeConfigInput<TTypes>,
 ): Scribe<TTypes> {
   const config = resolveConfig(input);
-  const project = createProject(config, { resolveAssets: true });
+  const project = createProject(config, { resolveAssets: true, resolveInlineTokens: true });
   const scribe = {
     config,
     project,

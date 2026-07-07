@@ -18,6 +18,7 @@ const CONTENT_TYPES: Record<string, string> = {
   ".svg": "image/svg+xml",
   ".avif": "image/avif",
   ".ico": "image/x-icon",
+  ".mp4": "video/mp4",
 };
 
 export function contentTypeForPath(webPath: string): string {
@@ -69,6 +70,38 @@ export interface AssetFileInfo {
   exists: boolean;
   sizeBytes?: number;
   contentType: string;
+}
+
+export interface StudioAssetResponse {
+  /** Backed by a plain ArrayBuffer (not SharedArrayBuffer) so Hono's `c.body` accepts it. */
+  body: Uint8Array<ArrayBuffer>;
+  contentType: string;
+}
+
+/** Read and return a traversal-safe asset file for studio preview serving. */
+export function serveStudioAsset(
+  config: ScribeConfig,
+  rawWebPath: string,
+): StudioAssetResponse | null {
+  let webPath: string;
+  try {
+    webPath = decodeURIComponent(rawWebPath);
+  } catch {
+    return null;
+  }
+  const resolved = resolveAssetWebPath(config, webPath);
+  if (!resolved) return null;
+  const info = statAsset(resolved.absPath, webPath);
+  if (!info.exists) return null;
+  try {
+    const buf = fs.readFileSync(resolved.absPath);
+    // Copy into a fresh ArrayBuffer-backed view so the type is Uint8Array<ArrayBuffer>.
+    const body = new Uint8Array(buf.byteLength);
+    body.set(buf);
+    return { body, contentType: contentTypeForPath(webPath) };
+  } catch {
+    return null;
+  }
 }
 
 /** Stat a resolved asset (existence + size). */

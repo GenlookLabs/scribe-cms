@@ -14,6 +14,7 @@ export interface ResolvedTranslateConfig {
 }
 
 const BUILTIN_TRANSLATE_RULES = [
+  "Placeholders written as %%1%%, %%2%%, %%3%% (double percent signs around a number) are immutable. Reproduce each placeholder that appears in the source EXACTLY as-is, exactly once, and never translate, edit, renumber, or add spaces inside it. You may move a placeholder to a different position within its sentence when the target grammar requires it.",
   "Do not translate brand or product names unless the brand has a well-known localized name in the target market (rare). Keep the original spelling and capitalization.",
   "Return the MDX body with real line breaks; do not use JSON escape sequences like \\n or \\t in the body string.",
   'In JSX attributes (e.g. FaqItem question="..."), use single quotes when the value contains double-quote characters (e.g. Hebrew דוא"ל), or escape them as \\".',

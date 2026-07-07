@@ -17,6 +17,8 @@ import {
   validateDocumentAssets,
 } from "./validate-assets.js";
 import { validateTranslationSlugSuffixes } from "./validate-slug-suffix.js";
+import { validateInlineTokens } from "./validate-inline-tokens.js";
+import { maskInlineTokensForMdx } from "../inline/tokens.js";
 import { prepareTranslatedMdxBody, validateMdxBody } from "../translate/validate-mdx-body.js";
 
 export interface ValidateIssue {
@@ -79,7 +81,11 @@ function validateDocumentMdxBody(
     body: string;
   },
 ): void {
-  const preparedBody = prepareTranslatedMdxBody(input.body).body;
+  // Mask inline tokens (and escapes) to inert text first so their `${{`/`{{`
+  // braces never register as MDX parse errors. Well-formed and malformed tokens
+  // alike are neutralized here; malformed ones are reported by the dedicated
+  // inline-token validation pass instead.
+  const preparedBody = prepareTranslatedMdxBody(maskInlineTokensForMdx(input.body)).body;
   const mdxValidation = validateMdxBody(preparedBody);
   if (!mdxValidation.ok) {
     issues.push({
@@ -264,6 +270,10 @@ export function validateProject(config: ScribeConfig): ValidateResult {
       field: issue.field,
       message: issue.message,
     });
+  }
+
+  for (const issue of validateInlineTokens(config)) {
+    issues.push(issue);
   }
 
   const dbForSuffix = openStore(config, "readonly");

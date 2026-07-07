@@ -140,6 +140,35 @@ test("cascade is transitive and drives downstream detaches", () => {
   );
 });
 
+test("body relation tokens warn only (never cascade, detach, or block)", () => {
+  const { project } = build(
+    [
+      { id: "target", schema: z.object({}) },
+      { id: "post", schema: z.object({}) },
+    ],
+    {
+      target: [{ slug: "x", data: {} }],
+      post: [
+        // Surviving doc whose body links the deleted target: should warn.
+        { slug: "p1", data: {}, body: "See ${{relation:target:x}} here." },
+        // A doc that references a NON-deleted target: no warning.
+        { slug: "p2", data: {}, body: "See ${{relation:post:p1}} here." },
+      ],
+    },
+  );
+  const plan = buildDeletionPlan(project, "target", "x");
+  assert.equal(isPlanBlocked(plan), false);
+  assert.equal(plan.cascades.length, 0);
+  assert.equal(plan.detaches.length, 0);
+  assert.equal(plan.bodyRefWarnings.length, 1);
+  assert.deepEqual(plan.bodyRefWarnings[0], {
+    typeId: "post",
+    enSlug: "p1",
+    targetTypeId: "target",
+    targetEnSlug: "x",
+  });
+});
+
 test("cascade cycle terminates (cycle-safe visited set)", () => {
   const { project } = build(
     [

@@ -107,6 +107,23 @@ export type {
   DeletionBlocker,
   DeletionAsset,
   DeletionStoreCounts,
+  BodyRefWarning,
 } from "./delete/plan.js";
+export {
+  extractInlineTokens,
+  fillPlaceholders,
+  unescapeInlineTokens,
+  placeholderMarker,
+} from "./inline/tokens.js";
+export type {
+  InlineToken,
+  InlineTokenKind,
+  StaticInlineToken,
+  RelationInlineToken,
+  AssetInlineToken,
+  VarInlineToken,
+  MalformedInlineToken,
+  ExtractInlineTokensResult,
+} from "./inline/tokens.js";
 export { executeDeletionPlan } from "./delete/execute.js";
 export type { ExecuteDeletionResult } from "./delete/execute.js";

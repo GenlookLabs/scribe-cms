@@ -29,7 +29,7 @@ function getAtPath(obj: Record<string, unknown>, fieldPath: string[]): unknown {
   return current;
 }
 
-function buildEnSlugIndex(config: ScribeConfig): Map<string, Set<string>> {
+export function buildEnSlugIndex(config: ScribeConfig): Map<string, Set<string>> {
   const index = new Map<string, Set<string>>();
   for (const type of config.types) {
     const slugs = new Set(listEnSlugs(config.rootDir, type.contentDir));

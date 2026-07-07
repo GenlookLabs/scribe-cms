@@ -1,6 +1,7 @@
 import { stripLocaleSuffixFromSlug } from "../core/localized-slug.js";
 import type { ContentTypeConfig, ScribeConfig, ScribeDocument } from "../core/types.js";
-import { computePageEnHash } from "../hash/page-hash.js";
+import { computeTranslationEnHash } from "../hash/page-hash.js";
+import { countMarkerOccurrences, extractInlineTokens, placeholderMarker } from "../inline/tokens.js";
 import { getTranslatablePayload, readEnDocument } from "../loader/create-loader.js";
 import { recordEnSnapshot } from "../history/record-snapshot.js";
 import { openStore } from "../storage/sqlite.js";
@@ -166,6 +167,28 @@ export function formatTranslateError(error: unknown): string {
   return message.length > 160 ? `${message.slice(0, 157)}…` : message;
 }
 
+/**
+ * Post-receive verification: a translated body must reproduce every inline-token
+ * marker `%%1%%..%%N%%` (N = tokens in the current EN body) exactly once. A model
+ * that drops, duplicates, or mangles a marker fails the row so it retries.
+ */
+export function verifyInlineMarkers(enRawBody: string, translatedBody: string): void {
+  const { tokens } = extractInlineTokens(enRawBody);
+  if (tokens.length === 0) return;
+  const missing: string[] = [];
+  const duplicated: string[] = [];
+  for (let i = 1; i <= tokens.length; i++) {
+    const count = countMarkerOccurrences(translatedBody, i);
+    if (count === 0) missing.push(placeholderMarker(i));
+    else if (count > 1) duplicated.push(placeholderMarker(i));
+  }
+  if (missing.length === 0 && duplicated.length === 0) return;
+  const parts: string[] = [];
+  if (missing.length > 0) parts.push(`missing ${missing.join(", ")}`);
+  if (duplicated.length > 0) parts.push(`duplicated ${duplicated.join(", ")}`);
+  throw new Error(`Inline token markers mismatch: ${parts.join("; ")}`);
+}
+
 function resolveContextLabel(enDoc: ScribeDocument, enSlug: string): string {
   const fm = enDoc.frontmatter as Record<string, unknown>;
   for (const key of ["title", "name", "h1"]) {
@@ -221,7 +244,13 @@ export function prepareTranslation(
   if (!enDoc) throw new Error(`EN document not found: ${item.enSlug}`);
 
   const payload = getTranslatablePayload(enDoc, type);
-  const currentEnHash = computePageEnHash(payload.frontmatter, payload.body);
+  // Hash and translate the PLACEHOLDER body (tokens swapped for inert `%%n%%`
+  // markers): a token's VALUE never affects the hash, so changing a relation
+  // target / asset path / var value never staleness-flags a locale, while
+  // adding/removing/moving tokens does. The hash goes through the shared helper
+  // so it can never diverge from the worklist's staleness check.
+  const { placeholderBody } = extractInlineTokens(payload.body);
+  const currentEnHash = computeTranslationEnHash(payload.frontmatter, payload.body);
 
   const db = openStore(config, "readonly");
   const existing = getTranslation(db, type.id, item.enSlug, item.locale);
@@ -247,7 +276,7 @@ export function prepareTranslation(
     targetLocale: item.locale,
     contextLabel: resolveContextLabel(enDoc, item.enSlug),
     translatableFrontmatter: payload.frontmatter,
-    enBody: payload.body,
+    enBody: placeholderBody,
     slugStrategy: type.slugStrategy,
     previousError: item.previousError,
   });
@@ -316,6 +345,12 @@ export function finalizeTranslation(
       type.body === false
         ? { body: "", adjusted: false }
         : assertValidTranslatedMdxBody(output.parsed.body);
+
+    // Placeholder markers must survive translation intact (choke point shared by
+    // the direct and batch paths). `payload.body` is the raw EN body used to
+    // build this translation, so its token count matches the markers the model
+    // was asked to reproduce.
+    verifyInlineMarkers(payload.body, translatedBody);
 
     const writeDb = openStore(config, "readwrite");
     const snapshotId =

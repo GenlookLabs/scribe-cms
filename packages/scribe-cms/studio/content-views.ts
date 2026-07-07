@@ -22,6 +22,8 @@ import {
 } from "./introspect-fields.js";
 import { readImageDimensions, resolveAssetWebPath, statAsset } from "./asset-serve.js";
 import { renderMdxApprox } from "./mdx-preview.js";
+import { extractInlineTokens } from "../src/inline/tokens.js";
+import { buildPreviewTokens, makeDocExists } from "./preview-tokens.js";
 import type { DeletionPlan } from "../src/delete/plan.js";
 
 // ---------------------------------------------------------------------------
@@ -583,9 +585,17 @@ function renderBodyPanel(ctx: InspectorContext): string {
       <a href="${rawHref}" class="${preview ? "" : "active"}">Raw</a>
       <a href="${previewHref}" class="${preview ? "active" : ""}">Preview</a>
     </span>`;
-  const content = preview
-    ? `<div class="mdx-preview">${renderMdxApprox(ctx.enDoc.content)}</div>`
-    : `<pre class="code">${escapeHtml(ctx.enDoc.content)}</pre>`;
+  let content: string;
+  if (preview) {
+    const { placeholderBody, tokens } = extractInlineTokens(ctx.enDoc.content);
+    const pv = buildPreviewTokens(tokens, {
+      enFrontmatter: ctx.enDoc.frontmatter as Record<string, unknown>,
+      docExists: makeDocExists(ctx.project, ctx.config),
+    });
+    content = `<div class="mdx-preview">${renderMdxApprox(placeholderBody, pv)}</div>`;
+  } else {
+    content = `<pre class="code">${escapeHtml(ctx.enDoc.content)}</pre>`;
+  }
   return `<div class="section">
     <div class="section-head">Body ${tabs}</div>
     ${content}
@@ -725,7 +735,7 @@ function renderIssuesPanel(issues: ValidateIssue[]): string {
   </div>`;
 }
 
-function renderUsedBy(
+export function renderUsedBy(
   project: ScribeProject,
   typeId: string,
   enSlug: string,
@@ -865,6 +875,19 @@ export function renderDeletionPlanPage(
   const totalSnapshots = plan.store.reduce((sum, s) => sum + s.snapshots, 0);
   const storeBody = `<p style="padding:6px 12px">${totalTranslations} translation row(s) and ${totalSnapshots} EN snapshot(s) across ${plan.store.length} document(s) will be removed from the store.</p>`;
 
+  const bodyRefsBody =
+    plan.bodyRefWarnings.length === 0
+      ? emptyRow("No body references will dangle.")
+      : `<p style="padding:6px 12px" class="dim">${plan.bodyRefWarnings.length} body reference(s) will dangle and become validation errors.</p>
+         <table class="data"><thead><tr><th>Entry</th><th>References</th></tr></thead><tbody>${plan.bodyRefWarnings
+          .map(
+            (w) => `<tr>
+            <td class="mono">${entryLink(project, w.typeId, w.enSlug)}</td>
+            <td class="mono">${entryLink(project, w.targetTypeId, w.targetEnSlug)}</td>
+          </tr>`,
+          )
+          .join("")}</tbody></table>`;
+
   const deleteCount = plan.roots.length + plan.cascades.length;
   const assetDeleteCount = plan.assets.filter((a) => a.action === "delete").length;
 
@@ -885,6 +908,7 @@ export function renderDeletionPlanPage(
     blocked ? section("Blockers", plan.blocked.length, blockersBody) : "",
     section("Documents deleted", deleteCount, deletesBody),
     section("References detached", plan.detaches.length, detachesBody),
+    section("Body references", plan.bodyRefWarnings.length, bodyRefsBody),
     section("Asset files", plan.assets.length, assetsBody),
     section("Store rows", plan.store.length, storeBody),
   ].join("");

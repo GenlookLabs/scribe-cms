@@ -16,6 +16,7 @@ const plan: DeletionPlan = {
     { typeId: "model", enSlug: "alice", translations: 3, snapshots: 1 },
     { typeId: "example", enSlug: "ex1", translations: 2, snapshots: 1 },
   ],
+  bodyRefWarnings: [],
 };
 
 test("render-text groups the plan and reports totals", () => {
