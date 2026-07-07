@@ -137,10 +137,16 @@ export function renderAssetBrowser(
 
   const sections = roots
     .map((root) => {
-      const files = listFilesUnderRoot(assetsDir, root);
+      // Roots can nest (`/try-on-examples` from managedDirs plus
+      // `/try-on-examples/models` from a field template). Each file belongs to
+      // its most specific root only, so nothing renders twice.
+      const childRoots = roots.filter((r) => r !== root && r.startsWith(root + "/"));
+      const underChildRoot = (p: string): boolean =>
+        childRoots.some((r) => p === r || p.startsWith(r + "/"));
+      const files = listFilesUnderRoot(assetsDir, root).filter((p) => !underChildRoot(p));
       // Referenced-but-missing files under this root that don't exist on disk.
       const referencedUnderRoot = [...assetRefs.keys()].filter(
-        (p) => p === root || p.startsWith(root + "/"),
+        (p) => (p === root || p.startsWith(root + "/")) && !underChildRoot(p),
       );
       const allPaths = new Set<string>([...files, ...referencedUnderRoot]);
 
@@ -168,6 +174,10 @@ export function renderAssetBrowser(
       ]
         .filter(Boolean)
         .join(" · ");
+
+      // A parent root fully covered by nested roots has nothing of its own to
+      // show; skip it rather than render an empty "No files" section.
+      if (entries.length === 0 && childRoots.length > 0) return "";
 
       const cards = entries.map((e) => renderAssetCard(e)).join("");
       return `<div class="section">
