@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.0.20 — 2026-07-07
+
+### Added
+
+- Inline body tokens: `${{static:"text"}}`, `${{relation:type:enSlug}}` (localized URL, or the bare EN slug with a `:slug` suffix), `${{asset:/web/path}}`, and `${{var:key}}` backed by a reserved frontmatter `vars` map. Escape a literal with `$\{{`. See `docs/inline-tokens.md`.
+- Hashing and translation operate on the placeholder body (tokens swapped for inert `%%n%%` markers), so editing a token's value never re-stales translations; adding, removing, or moving tokens does. Translated bodies store the markers and are filled at read time from the current EN token list, and each received translation is verified to reproduce every marker exactly once.
+- Validation covers tokens: malformed spans, dangling relations, url-mode relations to non-routable types, missing asset files, and missing `vars` keys are all errors. Body relation tokens count as references in the studio "Used by" panel and warn (without blocking) on delete.
+- `scribe delete <type> <en-slug> [--yes] [--dry-run]`: plans and executes entry deletion with a reference cascade, removing the EN file, its assets, and all stored translations and snapshots.
+- Studio body preview: custom JSX components render as raw escaped source blocks, relation tokens become links to the target document (dangling ones show as broken chips), and assets render as actual images served straight from the assets directory. New Raw/Preview toggle on document views.
+- Studio: "Used by" panel now also shows on the translation view, and lists support arrow-key navigation.
+
+### Fixed
+
+- Asset browser lists each asset under its most specific managed root instead of the first matching one.
+
+## 0.0.19 — 2026-07-07
+
+### Added
+
+- Templated asset fields: `field.asset()` declares a root-relative web path under `assets.dir`, with constraints, existence validation, and resolution to public URLs at read time (see `docs/assets.md`).
+- Bodyless content types: types can omit the MDX body entirely; translatability is derived from the schema instead of assumed.
+- Studio: content browser with per-type document lists, global search, a stale-while-revalidate cache for derived data, approximate MDX preview, and validation tooltips inline on documents.
+
+### Changed
+
+- `localeFallbacks` is optional on the resolved config.
+
 ## 0.0.18 — 2026-07-06
 
 ### Fixed
