@@ -1,0 +1,9 @@
+---
+version: "0.0.18"
+publishedAt: "2026-07-06"
+---
+
+## Fixed
+
+- Translations no longer fail when the model hallucinates a nested field (such as a blog `itemList`) that does not exist in the source document: the response schema is scoped to the source payload and orphan nested output is pruned before validation
+- Structural merge no longer overwrites source fields with `undefined` coming from the model output

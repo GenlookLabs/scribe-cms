@@ -1,0 +1,18 @@
+---
+version: "0.0.20"
+publishedAt: "2026-07-07"
+---
+
+## Added
+
+- Inline body tokens. Embed dynamic values directly in MDX prose: `$\{{static:"text"}}` for literals that must never be translated, `$\{{relation:type:enSlug}}` for a localized link to another document (add a `:slug` suffix to get the bare EN slug instead), `$\{{asset:/web/path.webp}}` for asset URLs, and `$\{{var:key}}` backed by a reserved `vars` map in the document frontmatter. To render a literal `$\{{` without it being parsed as a token, put a backslash between the dollar sign and the braces
+- Token values never trigger retranslation. Hashing and translation operate on a placeholder body where each token is an inert numbered marker, so editing a linked slug or a static string updates every locale instantly; only adding, removing, or moving tokens marks a translation stale. Received translations are verified to reproduce every marker exactly once
+- Validation covers tokens: malformed spans, relations to documents that do not exist, URL-mode relations to types without a public route, missing asset files, and missing `vars` keys are all reported as errors
+- Body relation tokens count as references: they appear in the studio "Used by" panel and produce a warning (not a block) when deleting the referenced document
+- `scribe delete <type> <en-slug>`: plans and executes entry deletion with a reference cascade, removing the source file, its assets, and all stored translations and snapshots. Supports `--dry-run` and `--yes`
+- Studio body preview understands your content: custom JSX components render as raw escaped source blocks, relation tokens become clickable links to the target document (dangling ones show as visibly broken), and assets render as actual images served straight from the assets directory. A new Raw/Preview toggle lets you switch views
+- The "Used by" panel now also shows on the translation view, and studio lists support arrow-key navigation
+
+## Fixed
+
+- The asset browser lists each asset under its most specific managed root instead of the first matching one
