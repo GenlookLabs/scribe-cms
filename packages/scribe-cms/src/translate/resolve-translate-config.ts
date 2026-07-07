@@ -17,6 +17,8 @@ const BUILTIN_TRANSLATE_RULES = [
   "Do not translate brand or product names unless the brand has a well-known localized name in the target market (rare). Keep the original spelling and capitalization.",
   "Return the MDX body with real line breaks; do not use JSON escape sequences like \\n or \\t in the body string.",
   'In JSX attributes (e.g. FaqItem question="..."), use single quotes when the value contains double-quote characters (e.g. Hebrew דוא"ל), or escape them as \\".',
+  "Match the EN source format: when the EN body uses Markdown/MDX (headings, paragraphs, GFM tables, links), keep that structure in the translation. Do not convert markdown elements into raw HTML (<p>, <h2>, <table>, etc.).",
+  "Otherwise match the format and components used in the EN source.",
 ];
 
 function slugStrategyRules(slugStrategy: SlugStrategy): string[] {

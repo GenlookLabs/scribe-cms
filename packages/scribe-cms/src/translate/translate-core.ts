@@ -309,9 +309,13 @@ export function finalizeTranslation(
       throw new Error(`Translation validation failed: ${validated.error}`);
     }
 
-    const { body: translatedBody, adjusted: mdxAdjusted } = assertValidTranslatedMdxBody(
-      output.parsed.body,
-    );
+    // Bodyless types (`body: false`) never persist a body: the translatable
+    // payload excluded it, so any body the model echoed back is dropped and the
+    // MDX validation pass is skipped.
+    const { body: translatedBody, adjusted: mdxAdjusted } =
+      type.body === false
+        ? { body: "", adjusted: false }
+        : assertValidTranslatedMdxBody(output.parsed.body);
 
     const writeDb = openStore(config, "readwrite");
     const snapshotId =

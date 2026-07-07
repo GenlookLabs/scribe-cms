@@ -32,6 +32,18 @@ describe("resolveConfig", () => {
     assert.equal(author.indexFallback, "none"); // reference-only → none
   });
 
+  it("defaults body to true and preserves an explicit body: false", () => {
+    const config = resolveConfig({
+      ...base,
+      types: [
+        { id: "blog", schema: z.object({}), path: "/blog/{slug}" },
+        { id: "model", schema: z.object({}), body: false },
+      ],
+    });
+    assert.equal(config.types[0]!.body, true);
+    assert.equal(config.types[1]!.body, false);
+  });
+
   it("is idempotent", () => {
     const config = resolveConfig(base);
     assert.equal(isResolvedConfig(config), true);
@@ -122,6 +134,48 @@ describe("resolveConfig", () => {
         localeFallbacks: false,
       });
       assert.deepEqual(config.localeFallbacks, {});
+    });
+  });
+
+  describe("assets", () => {
+    it("leaves assets/assetsPath undefined when neither assets nor assetsDir is set", () => {
+      const config = resolveConfig(base);
+      assert.equal(config.assets, undefined);
+      assert.equal(config.assetsPath, undefined);
+    });
+
+    it("passing assets:{} enables the group with defaults (dir public, publicPath /, managedDirs [])", () => {
+      const config = resolveConfig({ ...base, assets: {} });
+      assert.deepEqual(config.assets, {
+        assetsPath: path.resolve("/proj/public"),
+        publicPath: "/",
+        managedDirs: [],
+      });
+      assert.equal(config.assetsPath, path.resolve("/proj/public"));
+    });
+
+    it("legacy assetsDir populates assets.assetsPath (back-compat alias)", () => {
+      const config = resolveConfig({ ...base, assetsDir: "static" });
+      assert.equal(config.assetsPath, path.resolve("/proj/static"));
+      assert.deepEqual(config.assets, {
+        assetsPath: path.resolve("/proj/static"),
+        publicPath: "/",
+        managedDirs: [],
+      });
+    });
+
+    it("assets.dir wins over assetsDir", () => {
+      const config = resolveConfig({ ...base, assetsDir: "legacy", assets: { dir: "public" } });
+      assert.equal(config.assetsPath, path.resolve("/proj/public"));
+    });
+
+    it("preserves publicPath and managedDirs", () => {
+      const config = resolveConfig({
+        ...base,
+        assets: { publicPath: "https://cdn.example.com/", managedDirs: ["/blog-images"] },
+      });
+      assert.equal(config.assets?.publicPath, "https://cdn.example.com/");
+      assert.deepEqual(config.assets?.managedDirs, ["/blog-images"]);
     });
   });
 });

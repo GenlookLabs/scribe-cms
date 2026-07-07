@@ -120,7 +120,10 @@ export function parseEnMdx(
     noindex: builtin.noindex,
     canonicalPathOverride: builtin.canonicalPathOverride,
     frontmatter,
-    content: parsed.content,
+    // Bodyless types (`body: false`) never carry a body: the loader skips the
+    // MDX body entirely so runtimes, exports, and hashing all see an empty body.
+    // A stray body is reported separately by `scribe validate`.
+    content: type.body === false ? "" : parsed.content,
     filePath,
   };
 
@@ -307,6 +310,8 @@ export function getTranslatablePayload(
 ): { frontmatter: Record<string, unknown>; body: string } {
   return {
     frontmatter: pickTranslatable(doc.frontmatter, type.schema),
-    body: doc.content,
+    // Bodyless types never contribute a body to any translation payload, hash,
+    // or snapshot — regardless of what a document's `content` happens to hold.
+    body: type.body === false ? "" : doc.content,
   };
 }

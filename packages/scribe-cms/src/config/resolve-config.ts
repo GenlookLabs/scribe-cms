@@ -93,6 +93,9 @@ export function resolveConfig(
       label: type.label ?? type.id.charAt(0).toUpperCase() + type.id.slice(1),
       slugStrategy: type.slugStrategy ?? "fixed",
       indexFallback: type.indexFallback ?? (type.path ? "en" : "none"),
+      // `body` defaults to true (fully backwards compatible). A resolved type
+      // always carries an explicit boolean so consumers read one source of truth.
+      body: type.body ?? true,
     };
   });
 

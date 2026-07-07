@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ScribeConfig } from "../core/types.js";
+import type { ContentTypeConfig, ScribeConfig } from "../core/types.js";
+import { isTypeTranslatable } from "../core/introspect-schema.js";
 import { isPublishableContentFile } from "../loader/normalize-en.js";
 import { computePageEnHash } from "../hash/page-hash.js";
 import { getTranslatablePayload, readEnDocument } from "../loader/create-loader.js";
@@ -33,6 +34,13 @@ export interface WorklistOptions {
   strategy?: TranslationWorklistStrategy;
   /** Include fresh translations so prepareTranslation re-runs despite matching hashes. */
   force?: boolean;
+  /**
+   * Called once for each content type skipped because it is not translatable
+   * (bodyless with no translatable fields). The CLI uses it to emit the
+   * per-type "skipped" log line; other callers (studio) leave it unset for a
+   * silent skip.
+   */
+  onSkipType?: (type: ContentTypeConfig) => void;
 }
 
 function parseContentTypeFilter(contentType?: string): Set<string> | undefined {
@@ -64,6 +72,13 @@ export function buildWorklist(config: ScribeConfig, options: WorklistOptions = {
 
   for (const type of config.types) {
     if (contentTypes && !contentTypes.has(type.id)) continue;
+    // A type with nothing to translate (bodyless, no translatable fields) never
+    // produces work items — it stays out of the worklist, staleness totals, and
+    // the store. This is the single predicate every translation workflow shares.
+    if (!isTypeTranslatable(type)) {
+      options.onSkipType?.(type);
+      continue;
+    }
     const enSlugs = options.enSlug ? [options.enSlug] : listEnSlugs(config.rootDir, type.contentDir);
 
     for (const enSlug of enSlugs) {

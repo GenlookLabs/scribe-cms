@@ -9,6 +9,14 @@ export type {
   AssetMeta,
 } from "./core/field.js";
 export { getManagedRoots, templateManagedRoot } from "./core/managed-roots.js";
+export {
+  introspectSchema,
+  listTranslatableFields,
+  listRelationFields,
+  listAssetFields,
+  isTypeTranslatable,
+} from "./core/introspect-schema.js";
+export type { SchemaFieldMeta } from "./core/introspect-schema.js";
 export { defineConfig, defineContentType } from "./core/types.js";
 export type {
   ScribeConfigInput,

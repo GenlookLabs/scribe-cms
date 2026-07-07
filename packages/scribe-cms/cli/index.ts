@@ -282,6 +282,10 @@ mode to use.
         enSlug: options.slug,
         strategy: selection.strategy ?? "all",
         force: options.force,
+        onSkipType: (type) =>
+          console.log(
+            `${type.id}: not translatable (bodyless, no translatable fields) — skipped`,
+          ),
       });
       if (worklist.length === 0) {
         // Still pick up pending batch jobs from an interrupted previous run.

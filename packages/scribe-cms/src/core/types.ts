@@ -95,6 +95,17 @@ export interface ContentTypeInput<TSchema extends z.ZodTypeAny = z.ZodTypeAny> {
   indexFallback?: IndexFallback;
   /** Default sort for `list()`. Default: `"slug"`. */
   orderBy?: OrderBy<ScribeDocument<z.infer<TSchema>>>;
+  /**
+   * Whether entries carry an MDX body. Default: `true`. Set `false` for
+   * frontmatter-only reference types (e.g. structural `model`/`garment`
+   * catalogs): the loader skips MDX body work, validation errors on any
+   * non-empty body, translation payloads never include a body, and the studio
+   * shows a "frontmatter-only" chip instead of a body section. Combined with a
+   * schema that has no `field.translatable()` fields, the type is derived to be
+   * non-translatable and drops out of every translation workflow. See
+   * [Bodyless types](../../docs/bodyless-types.md).
+   */
+  body?: boolean;
   /** Custom validation across fields, run by `scribe validate`. */
   crossValidate?: (
     data: z.infer<TSchema>,

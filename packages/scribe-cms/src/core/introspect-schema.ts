@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { getAssetMeta, getFieldKind, getRelationTarget, peelOptionalWrappers } from "./field.js";
+import type { ContentTypeInput } from "./types.js";
 
 export interface SchemaFieldMeta {
   path: string[];
@@ -239,6 +240,24 @@ function mergeArrayOverlay(base: unknown[], overlay: unknown[]): unknown[] {
     }
     return overlayItem ?? item;
   });
+}
+
+/** Collect the schema fields marked `field.translatable()`. */
+export function listTranslatableFields(schema: z.ZodTypeAny): SchemaFieldMeta[] {
+  return introspectSchema(schema).filter((f) => f.kind === "translatable");
+}
+
+/**
+ * Whether a content type has anything to translate. A type with a body is
+ * always potentially translatable; a bodyless type (`body: false`) is
+ * translatable only when at least one schema field is `field.translatable()`.
+ *
+ * The single source of truth for every translation workflow (worklist, staleness,
+ * status counts, studio dashboards, store writes): a type for which this returns
+ * `false` disappears from all of them.
+ */
+export function isTypeTranslatable(type: Pick<ContentTypeInput, "schema" | "body">): boolean {
+  return listTranslatableFields(type.schema).length > 0 || type.body !== false;
 }
 
 /** Collect relation field paths and targets from a content schema. */

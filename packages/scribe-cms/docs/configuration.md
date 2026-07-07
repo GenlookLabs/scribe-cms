@@ -28,7 +28,8 @@ export default defineConfig({
 | `rootDir` | — (required) | Project root. Keep it relative (usually `"."`): the CLI resolves it against the config file's directory, `createScribe` against `process.cwd()`. Don't build it from `import.meta.url` — bundlers inline that path at build time, which breaks on serverless hosts like Vercel. Relative `contentDir`/`store` resolve against it. |
 | `contentDir` | `"content"` | Directory containing one folder per content type. |
 | `store` | `".scribe/store.sqlite"` | SQLite translation store. **Commit it — do not gitignore `.scribe/`.** |
-| `assetsDir` | — | Static assets root (e.g. `"public"`). When set, `scribe validate` warns about image paths in frontmatter or bodies that don't exist on disk. |
+| `assetsDir` | — | **Deprecated** alias for `assets.dir`. Static assets root (e.g. `"public"`). |
+| `assets` | — | Asset system config: `{ dir, publicPath, managedDirs }`. Passing `assets: {}` opts in with defaults (`dir: "public"`, `publicPath: "/"`, `managedDirs: []`). Enables declared-asset validation and load-time URL resolution. See [Asset management](./assets.md). |
 | `locales` | — (required) | All locales, including the default one. |
 | `defaultLocale` | `"en"` | Canonical source locale. Must appear in `locales`. |
 | `localeRouting` | `{ strategy: "path-prefix", prefixDefaultLocale: false }` | How locale markers appear in generated URLs. `path-prefix` prepends `/{locale}` (omit for default locale when `prefixDefaultLocale` is false). `search-param` appends `?{param}={locale}` for non-default locales. |
@@ -52,6 +53,7 @@ defineContentType({
   indexFallback: "en",         // default: "en" if path is set, else "none"
   orderBy: "-publishedAt",     // default: "slug"
   label: "Blog",               // default: capitalized id (studio UI only)
+  body: true,                  // default: true; set false for frontmatter-only types
   crossValidate: (data, ctx) => [],
   translate: { /* per-type overrides */ },
 })
@@ -66,6 +68,7 @@ defineContentType({
 | `slugStrategy` | `"fixed"`: every locale uses the English slug. `"localized"`: the translator produces a per-locale slug (`/fr/blog/bonjour-le-monde`). |
 | `indexFallback` | What `resolve()` returns when a locale has no translation: `"en"` serves the English document (with `actualLocale: "en"`), `"none"` returns nothing. |
 | `orderBy` | Default sort for `list()`: `"slug"`, `"publishedAt"`, `"-publishedAt"`, `"updatedAt"`, `"-updatedAt"`, or a comparator `(a, b) => number` over fully-typed documents. |
+| `body` | Whether entries carry an MDX body. Default `true`. Set `false` for **frontmatter-only** reference types (e.g. a structural `model` catalog): the loader skips the body, `scribe validate` errors on any non-empty body, translation payloads never include a body, and the studio shows a "frontmatter-only" chip. A `body: false` type whose schema has **no** `field.translatable()` fields is derived non-translatable and drops out of every translation workflow (see [Bodyless types](./bodyless-types.md) and [Translation](./translation.md#derived-translatability)). |
 | `crossValidate` | Extra validation run by `scribe validate`, receiving the parsed (typed) frontmatter. Return `{ field, message, level }[]`. |
 | `translate` | Per-type translation prompt/rules/model ([Translation](./translation.md)). |
 
@@ -106,6 +109,30 @@ Relations always store **English slugs**, are checked by `scribe validate`
 (a dangling required relation is a build-blocking error; a dangling optional
 one is a warning), and are dereferenced at runtime with
 [`related()`](./runtime-api.md#relations).
+
+### `field.asset(options?)`
+
+Declares a frontmatter field as a file reference (a root-relative web path
+into `assets.dir`) instead of a loose string. Structural (EN-only), validated
+by `scribe validate`, and resolved to a served URL at load time.
+
+```ts
+const schema = z.object({
+  productImage: field.asset({ dir: "/try-on/garments", formats: ["webp"], maxKB: 150 }),
+});
+```
+
+| Option | Description |
+| --- | --- |
+| `dir` | Web-path prefix the value must live under. Also declares a managed root. |
+| `template` | Derived-path template, e.g. `"/try-on/garments/{slug}/product.webp"` (`{slug}` is the EN slug). When set, the field may be omitted (the loader fills it); an explicit value overrides it. |
+| `formats` | Allowed extensions (lowercase, no dot). Violation is a warning. |
+| `maxKB` | File-size budget. Violation is a warning. |
+| `optional` | The field may be absent (only meaningful without `template`). A present value whose file is missing is still an error. |
+
+Constraints go in the options object, not chained Zod methods. Requires the
+`assets` config group to be enabled. See [Asset management](./assets.md) for the
+full design.
 
 ## Locale fallback chains
 

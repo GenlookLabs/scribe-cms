@@ -109,6 +109,50 @@ describe("buildWorklist", () => {
     assert.equal(wrongType[0]!.reason, "missing");
   });
 
+  it("skips bodyless types with no translatable fields but keeps bodyless types that have them", () => {
+    const structuralSchema = z.object({
+      displayName: field.structural(z.string().min(1)),
+    });
+    const model: ContentTypeConfig = {
+      id: "model",
+      schema: structuralSchema,
+      contentDir: "models",
+      label: "Model",
+      slugStrategy: "fixed",
+      indexFallback: "none",
+      body: false,
+    };
+    const garment: ContentTypeConfig = {
+      id: "garment",
+      schema, // translatable `title`
+      contentDir: "garments",
+      label: "Garment",
+      slugStrategy: "fixed",
+      indexFallback: "none",
+      body: false,
+    };
+    const config = makeProject([model, garment]);
+
+    const skipped: string[] = [];
+    const items = buildWorklist(config, {
+      locales: ["fr"],
+      onSkipType: (type) => skipped.push(type.id),
+    });
+
+    // model: bodyless + no translatable fields → skipped entirely.
+    assert.deepEqual(skipped, ["model"]);
+    // garment: bodyless but has a translatable field → stays in the worklist.
+    assert.deepEqual(
+      new Set(items.map((item) => item.contentType)),
+      new Set(["garment"]),
+    );
+
+    // The bodyless garment payload never carries a body.
+    const enDoc = readEnDocument(config, garment, "hello")!;
+    const payload = getTranslatablePayload(enDoc, garment);
+    assert.equal(payload.body, "");
+  });
+
   it("accepts comma-separated content types", () => {
     const vertical: ContentTypeConfig = {
       id: "vertical",

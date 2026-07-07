@@ -18,6 +18,33 @@ from the English document at load time. With `slugStrategy: "localized"` the
 translator also produces a per-locale URL slug (ASCII kebab-case,
 transliterated for non-Latin locales).
 
+A type declared `body: false` ([bodyless](./bodyless-types.md)) never sends a
+body: its payload is frontmatter-only. Its translatable frontmatter fields are
+still translated normally.
+
+## Derived translatability
+
+A content type is **translatable** when it has at least one
+`field.translatable()` field **or** it has a body (`body: true`, the default).
+The core predicate is `isTypeTranslatable(type)`, exported next to the other
+introspection helpers.
+
+A type that is **not** translatable (`body: false` **and** zero translatable
+fields — e.g. a purely structural `model` catalog) drops out of every
+translation workflow, so it never trains reviewers to ignore red badges:
+
+- `scribe translate` (including `--type` runs) skips it with one log line:
+  `model: not translatable (bodyless, no translatable fields) — skipped`.
+- It is excluded from staleness/coverage totals and per-locale counts — never
+  counted as missing or stale.
+- The studio marks it with a neutral "not translatable" chip (sidebar,
+  dashboard, collection browser) instead of red status dots, and the store
+  never writes snapshot or translation rows for it.
+
+A bodyless type that *does* have a translatable field (e.g. a `garment` with a
+translatable `title`) stays in the todos — only the combination *bodyless and
+zero translatable fields* opts out entirely.
+
 ## Staleness tracking
 
 Each stored translation records a SHA-256 hash of the English translatable
