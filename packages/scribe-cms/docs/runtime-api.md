@@ -163,6 +163,34 @@ scribe.glossary.related(doc, "terms");     // GlossaryDoc[]       (multiple)
 - Only top-level schema fields are exposed (nested relations are still
   validated, but dereference them manually).
 
+## Assets
+
+Fields declared with [`field.asset()`](./configuration.md#fieldassetoptions)
+resolve to final served URLs on read: `assets.publicPath` is applied and
+templated paths are materialized (`{slug}` → EN slug), so components consume
+`doc.frontmatter.productImage` directly with no URL building. Resolution runs
+only through `createScribe()`; raw/static exports and the translator always see
+source values.
+
+```ts
+const garment = scribe.garment.get("denim-flare");
+garment.frontmatter.productImage;
+// "/try-on/garments/denim-flare/product.webp"  (publicPath "/")
+// "https://cdn.example.com/try-on/garments/denim-flare/product.webp"  (CDN publicPath)
+```
+
+### `scribe.assets.url(ref)`
+
+Escape hatch for MDX body images and ad hoc paths — applies `publicPath` to a
+root-relative web path:
+
+```ts
+scribe.assets.url("/blog-images/hero.webp"); // publicPath applied
+```
+
+The second argument is reserved for a future preprocessing pipeline; passing any
+key throws in phase 1. See [Asset management](./assets.md).
+
 ## Sitemap
 
 ```ts

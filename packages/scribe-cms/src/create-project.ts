@@ -33,8 +33,9 @@ function buildRuntime(
   config: ScribeConfig,
   type: ContentTypeConfig,
   getRuntime: (id: string) => ContentTypeRuntime,
+  options: { resolveAssets?: boolean } = {},
 ): ContentTypeRuntime {
-  const load = createContentLoader(config, type);
+  const load = createContentLoader(config, type, { resolveAssets: options.resolveAssets });
   const relationFields = new Map<string, SchemaFieldMeta>(
     listRelationFields(type.schema)
       .filter((f) => f.path.length === 1)
@@ -210,9 +211,15 @@ function buildRuntime(
  * Apps should use `createScribe()` for typed per-type accessors.
  * Expects a resolved config (`resolveConfig` / `loadConfigSync`).
  *
+ * @param options.resolveAssets resolve declared asset fields to served URLs on
+ *   read (publicPath applied, templates materialized). Only `createScribe` sets
+ *   this; the CLI, validation, and static exports keep source values.
  * @internal
  */
-export function createProject(config: ScribeConfig): ScribeProject {
+export function createProject(
+  config: ScribeConfig,
+  options: { resolveAssets?: boolean } = {},
+): ScribeProject {
   const runtimes = new Map<string, ContentTypeRuntime>();
   const getRuntime = (id: string): ContentTypeRuntime => {
     const runtime = runtimes.get(id);
@@ -223,7 +230,7 @@ export function createProject(config: ScribeConfig): ScribeProject {
   };
 
   for (const type of config.types) {
-    runtimes.set(type.id, buildRuntime(config, type, getRuntime));
+    runtimes.set(type.id, buildRuntime(config, type, getRuntime, options));
   }
 
   return {

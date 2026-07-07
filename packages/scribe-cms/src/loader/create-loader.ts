@@ -7,7 +7,12 @@ import {
   mergeBuiltinsIntoFrontmatter,
   seoFieldsFromEn,
 } from "../core/builtin-fields.js";
-import { mergeStructuralOntoLocale, pickTranslatable } from "../core/introspect-schema.js";
+import {
+  listAssetFields,
+  mergeStructuralOntoLocale,
+  pickTranslatable,
+  type SchemaFieldMeta,
+} from "../core/introspect-schema.js";
 import type {
   AllDocuments,
   ContentTypeConfig,
@@ -19,6 +24,7 @@ import { openStore, resolveStorePath } from "../storage/sqlite.js";
 import { listTranslationsForType } from "../storage/translations.js";
 import { prepareTranslatedMdxBody } from "../translate/validate-mdx-body.js";
 import { isPublishableContentFile, normalizeEnFrontmatter } from "./normalize-en.js";
+import { resolveDocumentAssets } from "./resolve-assets.js";
 
 function isPostFile(name: string): boolean {
   return isPublishableContentFile(name);
@@ -159,13 +165,26 @@ function buildDocumentFromTranslation(
 
 const DEV_REVALIDATE_MS = 1500;
 
-export function createContentLoader(config: ScribeConfig, type: ContentTypeConfig): () => AllDocuments {
+export function createContentLoader(
+  config: ScribeConfig,
+  type: ContentTypeConfig,
+  options: { resolveAssets?: boolean } = {},
+): () => AllDocuments {
   let cached: AllDocuments | null = null;
   let signature = "";
   let lastCheck = 0;
   const contentDir = path.join(/* turbopackIgnore: true */ config.rootDir, type.contentDir);
   const storePath = resolveStorePath(config);
   const isProd = process.env.NODE_ENV === "production";
+
+  // Asset resolution is a runtime read-path concern (createScribe only); the CLI,
+  // validation, and static exports build the project without it and see source values.
+  const assets = config.assets;
+  const assetFields: SchemaFieldMeta[] =
+    assets && options.resolveAssets ? listAssetFields(type.schema) : [];
+  const resolveAssets = (doc: ScribeDocument): void => {
+    if (assetFields.length > 0 && assets) resolveDocumentAssets(doc, assetFields, assets);
+  };
 
   function computeSignature(): string {
     const files = listEnFiles(contentDir);
@@ -232,12 +251,18 @@ export function createContentLoader(config: ScribeConfig, type: ContentTypeConfi
       for (const row of rowsByLocale.get(locale) ?? []) {
         const enDoc = englishBySlug.get(row.en_slug);
         if (!enDoc) continue;
+        // Merge structural (incl. asset) fields from the *unresolved* EN source,
+        // then resolve the locale doc's own fresh frontmatter.
         const doc = buildDocumentFromTranslation(row, enDoc, type, config);
+        resolveAssets(doc);
         bySlug.set(doc.slug, doc);
         byEnSlug.set(row.en_slug, doc);
       }
       out.set(locale, { bySlug, byEnSlug });
     }
+
+    // Resolve EN docs last: locale docs merged from their unresolved frontmatter above.
+    for (const doc of englishBySlug.values()) resolveAssets(doc);
 
     return out;
   }

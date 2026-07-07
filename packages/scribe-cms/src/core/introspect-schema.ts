@@ -1,12 +1,17 @@
 import type { z } from "zod";
-import { getFieldKind, getRelationTarget, peelOptionalWrappers } from "./field.js";
+import { getAssetMeta, getFieldKind, getRelationTarget, peelOptionalWrappers } from "./field.js";
 
 export interface SchemaFieldMeta {
   path: string[];
-  kind: "translatable" | "structural" | "relation";
+  kind: "translatable" | "structural" | "relation" | "asset";
   relationTarget?: string;
   relationMultiple?: boolean;
   relationOptional?: boolean;
+  assetDir?: string;
+  assetTemplate?: string;
+  assetFormats?: string[];
+  assetMaxKB?: number;
+  assetOptional?: boolean;
 }
 
 function getArrayElement(schema: z.ZodTypeAny): z.ZodTypeAny | null {
@@ -37,6 +42,21 @@ export function introspectSchema(schema: z.ZodTypeAny, prefix: string[] = []): S
         relationTarget: relation.typeId,
         relationMultiple: relation.multiple,
         relationOptional: relation.optional,
+      },
+    ];
+  }
+
+  const asset = getAssetMeta(schema);
+  if (asset && prefix.length > 0) {
+    return [
+      {
+        path: prefix,
+        kind: "asset",
+        assetDir: asset.dir,
+        assetTemplate: asset.template,
+        assetFormats: asset.formats,
+        assetMaxKB: asset.maxKB,
+        assetOptional: asset.optional,
       },
     ];
   }
@@ -167,7 +187,7 @@ export function pruneOrphanNestedTranslations(
 /** Extract frontmatter fields marked as structural (EN-only). */
 export function pickStructural(data: Record<string, unknown>, schema: z.ZodTypeAny): Record<string, unknown> {
   const structuralPaths = introspectSchema(schema)
-    .filter((f) => f.kind === "structural" || f.kind === "relation")
+    .filter((f) => f.kind === "structural" || f.kind === "relation" || f.kind === "asset")
     .map((f) => f.path);
   return extractByPaths(data, structuralPaths);
 }
@@ -224,4 +244,9 @@ function mergeArrayOverlay(base: unknown[], overlay: unknown[]): unknown[] {
 /** Collect relation field paths and targets from a content schema. */
 export function listRelationFields(schema: z.ZodTypeAny): SchemaFieldMeta[] {
   return introspectSchema(schema).filter((f) => f.kind === "relation");
+}
+
+/** Collect asset field paths and constraints from a content schema. */
+export function listAssetFields(schema: z.ZodTypeAny): SchemaFieldMeta[] {
+  return introspectSchema(schema).filter((f) => f.kind === "asset");
 }

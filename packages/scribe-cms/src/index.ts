@@ -1,10 +1,14 @@
-export { field, getRelationTarget, getFieldKind, unwrapSchema } from "./core/field.js";
+export { field, getRelationTarget, getAssetMeta, getFieldKind, unwrapSchema } from "./core/field.js";
 export type {
   RelationBrand,
   RelationField,
   RelationFieldOptions,
   RelationMeta,
+  AssetField,
+  AssetFieldOptions,
+  AssetMeta,
 } from "./core/field.js";
+export { getManagedRoots, templateManagedRoot } from "./core/managed-roots.js";
 export { defineConfig, defineContentType } from "./core/types.js";
 export type {
   ScribeConfigInput,
@@ -29,6 +33,9 @@ export type {
   LocaleRoutingConfig,
   SlugStrategy,
   IndexFallback,
+  AssetsConfigInput,
+  ResolvedAssetsConfig,
+  AssetUrlOptions,
   Scribe,
   InferDocMap,
   InferDocFromTypeConfig,

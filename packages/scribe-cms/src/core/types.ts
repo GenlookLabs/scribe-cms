@@ -113,6 +113,41 @@ export interface ContentTypeConfig<TSchema extends z.ZodTypeAny = z.ZodTypeAny>
 }
 
 /**
+ * The `assets` config group. Passing `assets: {}` opts a project into the
+ * asset system with defaults; without it (and without the deprecated
+ * `assetsDir`), asset validation and loader resolution are skipped entirely.
+ * See [Asset management](../../docs/assets.md).
+ */
+export interface AssetsConfigInput {
+  /** Where source files live on disk, relative to `rootDir`. Default: `"public"`. */
+  dir?: string;
+  /**
+   * URL prefix the frontend serves assets under — a path (`"/"`, `"/static/"`)
+   * or an absolute origin (`"https://cdn.example.com/"`). Default: `"/"`.
+   */
+  publicPath?: string;
+  /**
+   * Extra Scribe-owned roots (web paths) not covered by any `field.asset()`
+   * `dir`/`template` — e.g. directories referenced from MDX bodies. Used by the
+   * future audit layer; files outside managed roots are never reported.
+   */
+  managedDirs?: string[];
+}
+
+/** Resolved `assets` group (absolute `assetsPath`, defaults applied). */
+export interface ResolvedAssetsConfig {
+  /** Absolute path to the static assets folder. */
+  assetsPath: string;
+  /** URL prefix served under (raw string; join via the loader helper). */
+  publicPath: string;
+  /** Extra Scribe-owned source roots (web paths) for the audit layer. */
+  managedDirs: string[];
+}
+
+/** Options reserved for the future asset preprocessing pipeline. Phase 1 throws on any provided key. */
+export interface AssetUrlOptions {}
+
+/**
  * The shape accepted by `defineConfig()` / `createScribe()`.
  * Relative paths (`contentDir`, `store`) resolve against `rootDir`.
  */
@@ -125,8 +160,10 @@ export interface ScribeConfigInput<
   contentDir?: string;
   /** Path to the SQLite translation store. Default: `".scribe/store.sqlite"`. Commit this file; do not gitignore `.scribe/`. */
   store?: string;
-  /** Path to the static assets folder (e.g. Next.js `public`). Relative to project `rootDir`. When set, `scribe validate` warns on missing image files. */
+  /** Path to the static assets folder (e.g. Next.js `public`). Relative to project `rootDir`. When set, `scribe validate` warns on missing image files. @deprecated Use `assets.dir` instead. */
   assetsDir?: string;
+  /** Asset system config (`{ dir, publicPath, managedDirs }`). Supersedes `assetsDir`. See [Asset management](../../docs/assets.md). */
+  assets?: AssetsConfigInput;
   /** All locales, including the default one. */
   locales: string[];
   /** Canonical source locale. Must be in `locales`. Default: `"en"`. */
@@ -149,8 +186,10 @@ export interface ScribeConfig {
   rootDir: string;
   /** Absolute path to the SQLite translation store. */
   storePath: string;
-  /** Absolute path to the static assets folder, when `assetsDir` is configured. */
+  /** Absolute path to the static assets folder, when the asset system is enabled. Mirrors `assets.assetsPath` for back-compat (existing consumers read this). */
   assetsPath?: string;
+  /** Resolved asset system config; `undefined` unless `assets`/`assetsDir` was set. */
+  assets?: ResolvedAssetsConfig;
   locales: string[];
   defaultLocale: string;
   localeRouting: LocaleRoutingConfig;
@@ -327,6 +366,8 @@ export type Scribe<TTypes extends readonly ContentTypeInput<any>[]> = {
   sitemap(
     options: import("../sitemap/types.js").GenerateSitemapOptions,
   ): Promise<import("../sitemap/types.js").SitemapEntry[]>;
+  /** Asset URL helper: applies `assets.publicPath` to a root-relative web path. Escape hatch for MDX body images. */
+  assets: { url(ref: string, opts?: AssetUrlOptions): string };
   /** The resolved config (defaults applied, paths absolute). */
   config: ScribeConfig;
   project: ScribeProject;

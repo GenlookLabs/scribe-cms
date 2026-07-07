@@ -3,12 +3,22 @@ import type { z as Zod } from "zod";
 
 const FIELD_KIND = Symbol.for("@genlook/scribe/fieldKind");
 const RELATION_META = Symbol.for("@genlook/scribe/relationMeta");
+const ASSET_META = Symbol.for("@genlook/scribe/assetMeta");
 
 export type FieldKind = "translatable" | "structural";
 
 export interface RelationMeta {
   typeId: string;
   multiple: boolean;
+  optional: boolean;
+}
+
+/** Constraints carried by a `field.asset()` schema (see `docs/assets.md`). */
+export interface AssetMeta {
+  dir?: string;
+  template?: string;
+  formats?: string[];
+  maxKB?: number;
   optional: boolean;
 }
 
@@ -71,6 +81,36 @@ export function getRelationTarget(schema: Zod.ZodTypeAny): RelationMeta | null {
   return null;
 }
 
+/** Return asset metadata if the field was created with `field.asset()`. */
+export function getAssetMeta(schema: Zod.ZodTypeAny): AssetMeta | null {
+  let current: Zod.ZodTypeAny = schema;
+  for (let i = 0; i < 8; i++) {
+    const tagged = current as Zod.ZodTypeAny & {
+      [ASSET_META]?: AssetMeta;
+      unwrap?: () => Zod.ZodTypeAny;
+      removeDefault?: () => Zod.ZodTypeAny;
+      _def?: { innerType?: Zod.ZodTypeAny };
+    };
+    if (tagged[ASSET_META]) {
+      return tagged[ASSET_META];
+    }
+    if (typeof tagged.unwrap === "function") {
+      current = tagged.unwrap();
+      continue;
+    }
+    if (typeof tagged.removeDefault === "function") {
+      current = tagged.removeDefault();
+      continue;
+    }
+    if (tagged._def?.innerType) {
+      current = tagged._def.innerType;
+      continue;
+    }
+    break;
+  }
+  return null;
+}
+
 function mark<T extends Zod.ZodTypeAny>(schema: T, kind: FieldKind): T {
   Object.defineProperty(schema, FIELD_KIND, {
     value: kind,
@@ -82,6 +122,15 @@ function mark<T extends Zod.ZodTypeAny>(schema: T, kind: FieldKind): T {
 
 function markRelation<T extends Zod.ZodTypeAny>(schema: T, meta: RelationMeta): T {
   Object.defineProperty(schema, RELATION_META, {
+    value: meta,
+    enumerable: false,
+    configurable: true,
+  });
+  return mark(schema, "structural");
+}
+
+function markAsset<T extends Zod.ZodTypeAny>(schema: T, meta: AssetMeta): T {
+  Object.defineProperty(schema, ASSET_META, {
     value: meta,
     enumerable: false,
     configurable: true,
@@ -105,7 +154,41 @@ export interface RelationFieldOptions {
   max?: number;
 }
 
+/**
+ * Options for `field.asset()`. Constraints live here (not as chained Zod
+ * methods) because chaining clones the schema and would drop the asset
+ * metadata. See `docs/assets.md` for the full design.
+ */
+export interface AssetFieldOptions {
+  /** Web-path prefix the value must live under (e.g. `"/try-on/garments"`). Also declares a managed root. */
+  dir?: string;
+  /**
+   * Derived-path template, e.g. `"/try-on/garments/{slug}/product.webp"` —
+   * `{slug}` is the entry's EN slug. When set, the frontmatter field may be
+   * omitted entirely; the loader fills it. An explicit frontmatter value
+   * overrides the template. Its static prefix counts as a managed root.
+   */
+  template?: string;
+  /** Allowed extensions (lowercase, no dot). Violation = validation warning. */
+  formats?: string[];
+  /** File-size budget in kilobytes. Violation = validation warning. */
+  maxKB?: number;
+  /** The field may be absent (only meaningful without `template`). A present value whose file is missing is still an error. */
+  optional?: boolean;
+}
+
 type Bool<T> = [T] extends [true] ? true : false;
+
+/**
+ * Zod shape of a `field.asset()` schema: optional only when `optional` is set.
+ *
+ * A non-optional `template` field types as `ZodString` even though the runtime
+ * schema tolerates an absent frontmatter value: the loader materializes the
+ * templated path onto every document it serves (`resolveDocumentAssets` runs on
+ * both EN and locale docs), so consumers always observe a `string`.
+ */
+export type AssetField<TOpts extends AssetFieldOptions = AssetFieldOptions> =
+  Bool<TOpts["optional"]> extends true ? Zod.ZodOptional<Zod.ZodString> : Zod.ZodString;
 
 type RelationZod<TOpts extends RelationFieldOptions> =
   Bool<TOpts["optional"]> extends true
@@ -130,6 +213,8 @@ type RelationFieldFor<
  * - `structural(schema)` — EN-only; merged from EN into every locale document.
  * - `relation(typeId, options?)` — EN slug reference(s) to another content type,
  *   validated by `scribe validate` and dereferenced via `scribe.<type>.related()`.
+ * - `asset(options?)` — root-relative web path to a file under `assets.dir`,
+ *   validated by `scribe validate` and resolved to a served URL at load time.
  */
 export const field = {
   translatable: <T extends Zod.ZodTypeAny>(schema: T): T => mark(schema, "translatable"),
@@ -157,6 +242,20 @@ export const field = {
     markRelation(inner, { typeId, multiple, optional });
     const schema = optional ? inner.optional() : inner;
     return schema as RelationFieldFor<TTarget, TOpts>;
+  },
+  asset: <const TOpts extends AssetFieldOptions = {}>(options?: TOpts): AssetField<TOpts> => {
+    const optional = options?.optional ?? false;
+    const inner = z.string().min(1);
+    markAsset(inner, {
+      dir: options?.dir,
+      template: options?.template,
+      formats: options?.formats,
+      maxKB: options?.maxKB,
+      optional,
+    });
+    // A templated field may be omitted in frontmatter — the loader materializes it.
+    const schema = optional || options?.template !== undefined ? inner.optional() : inner;
+    return schema as AssetField<TOpts>;
   },
 };
 

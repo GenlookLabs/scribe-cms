@@ -2,6 +2,7 @@ import path from "node:path";
 import type {
   ContentTypeConfig,
   LocaleFallbacks,
+  ResolvedAssetsConfig,
   ScribeConfig,
   ScribeConfigInput,
 } from "../core/types.js";
@@ -62,7 +63,20 @@ export function resolveConfig(
   const projectRoot = path.resolve(baseDir ?? process.cwd(), raw.rootDir);
   const contentRoot = path.resolve(projectRoot, raw.contentDir ?? "content");
   const storePath = path.resolve(projectRoot, raw.store ?? ".scribe/store.sqlite");
-  const assetsPath = raw.assetsDir ? path.resolve(projectRoot, raw.assetsDir) : undefined;
+
+  // The asset system is opt-in: enabled only when `assets` or the deprecated
+  // `assetsDir` is set. When enabled, `assets` wins over `assetsDir`, and dir /
+  // publicPath / managedDirs default to "public" / "/" / []. Left off entirely,
+  // both `assetsPath` and `assets` stay undefined so no asset validation runs.
+  let assetsPath: string | undefined;
+  let assets: ResolvedAssetsConfig | undefined;
+  if (raw.assets !== undefined || raw.assetsDir !== undefined) {
+    const dir = raw.assets?.dir ?? raw.assetsDir ?? "public";
+    const publicPath = raw.assets?.publicPath ?? "/";
+    const managedDirs = raw.assets?.managedDirs ?? [];
+    assetsPath = path.resolve(projectRoot, dir);
+    assets = { assetsPath, publicPath, managedDirs };
+  }
 
   const seenIds = new Set<string>();
   const types: ContentTypeConfig[] = raw.types.map((type) => {
@@ -86,6 +100,7 @@ export function resolveConfig(
     rootDir: contentRoot,
     storePath,
     assetsPath,
+    assets,
     locales: [...raw.locales],
     defaultLocale,
     localeRouting,

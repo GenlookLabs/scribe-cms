@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ScribeConfig } from "../core/types.js";
+import matter from "gray-matter";
+import type { ContentTypeConfig, ScribeConfig } from "../core/types.js";
 import { createProject } from "../create-project.js";
 import { validateTypeRedirects } from "./validate-redirects.js";
 import { validateLocaleBuiltinFields } from "../core/builtin-fields.js";
@@ -10,7 +11,11 @@ import { openStore } from "../storage/sqlite.js";
 import { isRoutableType } from "../i18n/build-url.js";
 import { getTranslation } from "../storage/translations.js";
 import { validateRelations } from "./validate-relations.js";
-import { validateDocumentAssets } from "./validate-assets.js";
+import {
+  collectDeclaredAssetPaths,
+  validateDeclaredAssetFields,
+  validateDocumentAssets,
+} from "./validate-assets.js";
 import { validateTranslationSlugSuffixes } from "./validate-slug-suffix.js";
 import { prepareTranslatedMdxBody, validateMdxBody } from "../translate/validate-mdx-body.js";
 
@@ -35,6 +40,34 @@ function listEnSlugs(rootDir: string, contentDir: string): string[] {
     .readdirSync(dir)
     .filter(isPublishableContentFile)
     .map((f) => f.replace(/\.(md|mdx)$/, ""));
+}
+
+/**
+ * Read the raw MDX body of a bodyless-type EN entry (the loader zeroes it, so we
+ * re-read the source) and report an error when it holds anything but whitespace.
+ */
+function validateBodylessEntry(
+  issues: ValidateIssue[],
+  config: ScribeConfig,
+  type: ContentTypeConfig,
+  enSlug: string,
+): void {
+  const contentDir = path.join(config.rootDir, type.contentDir);
+  for (const ext of [".mdx", ".md"]) {
+    const filePath = path.join(contentDir, `${enSlug}${ext}`);
+    if (!fs.existsSync(filePath)) continue;
+    const body = matter(fs.readFileSync(filePath, "utf8")).content;
+    if (body.trim().length > 0) {
+      issues.push({
+        level: "error",
+        contentType: type.id,
+        enSlug,
+        field: "body",
+        message: `type "${type.id}" is frontmatter-only (body: false) but the entry has body content`,
+      });
+    }
+    return;
+  }
 }
 
 function validateDocumentMdxBody(
@@ -119,21 +152,49 @@ export function validateProject(config: ScribeConfig): ValidateResult {
         });
       }
 
-      for (const issue of validateDocumentAssets(config, {
+      // Declared asset fields are EN-sourced structural: validate on EN only.
+      // Locale docs never store them, so they'd otherwise read as "required missing".
+      for (const issue of validateDeclaredAssetFields(config, {
         contentType: type.id,
         enSlug,
-        frontmatter: enDoc.frontmatter,
-        body: enDoc.content,
+        frontmatter: enDoc.frontmatter as Record<string, unknown>,
+        schema: type.schema,
       })) {
         issues.push(issue);
       }
 
-      validateDocumentMdxBody(issues, {
-        contentType: type.id,
+      // Skip declared-asset web paths in the heuristic pass (EN + locales) to
+      // avoid double reporting the same missing file at different levels.
+      const declaredAssetPaths = collectDeclaredAssetPaths(
+        enDoc.frontmatter as Record<string, unknown>,
         enSlug,
-        locale: config.defaultLocale,
-        body: enDoc.content,
-      });
+        type.schema,
+      );
+
+      for (const issue of validateDocumentAssets(
+        config,
+        {
+          contentType: type.id,
+          enSlug,
+          frontmatter: enDoc.frontmatter,
+          body: enDoc.content,
+        },
+        declaredAssetPaths,
+      )) {
+        issues.push(issue);
+      }
+
+      if (type.body === false) {
+        // Frontmatter-only type: no MDX body work; instead flag a stray body.
+        validateBodylessEntry(issues, config, type, enSlug);
+      } else {
+        validateDocumentMdxBody(issues, {
+          contentType: type.id,
+          enSlug,
+          locale: config.defaultLocale,
+          body: enDoc.content,
+        });
+      }
 
       for (const locale of config.locales) {
         if (locale === config.defaultLocale) continue;
@@ -153,22 +214,28 @@ export function validateProject(config: ScribeConfig): ValidateResult {
         }
 
         const preparedBody = prepareTranslatedMdxBody(row.body).body;
-        for (const issue of validateDocumentAssets(config, {
-          contentType: type.id,
-          enSlug,
-          locale,
-          frontmatter: localeFm,
-          body: preparedBody,
-        })) {
+        for (const issue of validateDocumentAssets(
+          config,
+          {
+            contentType: type.id,
+            enSlug,
+            locale,
+            frontmatter: localeFm,
+            body: preparedBody,
+          },
+          declaredAssetPaths,
+        )) {
           issues.push(issue);
         }
 
-        validateDocumentMdxBody(issues, {
-          contentType: type.id,
-          enSlug,
-          locale,
-          body: row.body,
-        });
+        if (type.body !== false) {
+          validateDocumentMdxBody(issues, {
+            contentType: type.id,
+            enSlug,
+            locale,
+            body: row.body,
+          });
+        }
       }
     }
 

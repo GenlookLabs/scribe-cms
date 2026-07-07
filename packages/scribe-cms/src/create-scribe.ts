@@ -1,4 +1,5 @@
 import type {
+  AssetUrlOptions,
   ContentTypeInput,
   ContentTypeRuntime,
   Scribe,
@@ -6,6 +7,7 @@ import type {
 } from "./core/types.js";
 import { resolveConfig } from "./config/resolve-config.js";
 import { createProject } from "./create-project.js";
+import { joinPublicPath } from "./loader/resolve-assets.js";
 import { generateSitemap } from "./sitemap/generate-sitemap.js";
 import type { GenerateSitemapOptions } from "./sitemap/types.js";
 
@@ -21,7 +23,7 @@ export function createScribe<const TTypes extends readonly ContentTypeInput<any>
   input: ScribeConfigInput<TTypes>,
 ): Scribe<TTypes> {
   const config = resolveConfig(input);
-  const project = createProject(config);
+  const project = createProject(config, { resolveAssets: true });
   const scribe = {
     config,
     project,
@@ -30,6 +32,17 @@ export function createScribe<const TTypes extends readonly ContentTypeInput<any>
     listRoutableTypes: project.listRoutableTypes,
     sitemap(options: GenerateSitemapOptions) {
       return generateSitemap(project, options);
+    },
+    assets: {
+      url(ref: string, opts?: AssetUrlOptions) {
+        if (opts && Object.keys(opts).length > 0) {
+          throw new Error(
+            `scribe.assets.url: options are reserved for a future pipeline; got ${Object.keys(opts).join(", ")}`,
+          );
+        }
+        const assetsConfig = config.assets;
+        return assetsConfig ? joinPublicPath(assetsConfig.publicPath, ref) : ref;
+      },
     },
   } as unknown as Scribe<TTypes>;
 
