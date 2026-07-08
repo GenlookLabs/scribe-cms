@@ -3,7 +3,22 @@ version: "0.0.18"
 publishedAt: "2026-07-06"
 ---
 
+*Covers releases 0.0.13 to 0.0.18.*
+
+## Added
+
+- `scribe translate` now runs through the Gemini Batch API by default, cutting token costs by 50%. Runs are resumable: quit during polling and run `scribe translate` again to pick pending jobs back up. Use `--batch` or `--direct` to choose the mode explicitly
+- Automatic locale fallback chains: a regional locale with no translation is served its base language before English (`fr-CA` falls back to `fr`). On by default; disable with `localeFallbacks: false`
+- Failed translations are retried once automatically at the end of the run, with the validation errors fed back to the model so it can fix them
+- `scribe translate --type` accepts comma-separated content type ids
+
+## Changed
+
+- Translation prompts share an identical English prefix across all target locales, so Gemini context caching discounts repeated input tokens. Thinking tokens are now counted in the reported cost
+
 ## Fixed
 
-- Translations no longer fail when the model hallucinates a nested field (such as a blog `itemList`) that does not exist in the source document: the response schema is scoped to the source payload and orphan nested output is pruned before validation
-- Structural merge no longer overwrites source fields with `undefined` coming from the model output
+- Transient Gemini errors are retried automatically with backoff
+- Hallucinated nested fields in model output are pruned instead of failing the run
+- The target locale is always appended to prompts, even with a custom `translate.prompt`
+- `scribe translate --force` now retranslates fresh content too

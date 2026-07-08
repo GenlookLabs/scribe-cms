@@ -3,15 +3,19 @@ version: "0.0.11"
 publishedAt: "2026-06-16"
 ---
 
+*Covers releases 0.0.8 to 0.0.11.*
+
 ## Added
 
-- MDX validation at translation time and in `scribe validate` — catches bodies that would fail Next.js prerender
+- Per-content-type `_redirects.json` files replace frontmatter `aliases` and `redirect_to`: same-type, cross-type, and external redirects, with automatic translated-slug expansion
+- `localeRouting` config and `createUrlBuilder()` for config-driven locale URL generation
+- `listRoutableTypes()` and `isRoutableType` to find content types with public routes
+- MDX validation at translation time and in `scribe validate`, catching bodies that would fail prerender
 
-## Changed
+## Fixed
 
-- Built-in rules: do not translate brand names unless locally known; MDX bodies must use real line breaks
-- Legacy translations with literal `\n` escapes are normalized on read
+- Cross-type redirects with the same EN slug in `from` and `toSlug` are no longer rejected as self-redirects
 
 ## Removed
 
-- `slugPreserveTerms` — steer brand handling via `translate.context` / `translate.rules` instead
+- Frontmatter `aliases` and `redirect_to` (use `_redirects.json`) and `slugPreserveTerms` (use `translate.context` / `translate.rules`)

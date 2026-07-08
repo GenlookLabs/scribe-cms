@@ -1,8 +1,0 @@
----
-version: "0.0.15"
-publishedAt: "2026-07-06"
----
-
-## Added
-
-- Failed translations are now retried once automatically at the end of the run, with the validation errors fed back to the model so it can fix them (wrong field types, missing arrays, over-length strings, truncated JSON). Batch runs retry as one extra batch job at the batch rate; direct runs retry directly. The recap lists every failure with its full error before the retry, the summary shows `+N on retry`, and anything that fails twice is logged again with its new error
