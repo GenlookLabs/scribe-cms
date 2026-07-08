@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "next dev",
     "translate": "scribe translate --type landing --preset all --strategy missing-only --no-progress --concurrency 3 && scribe translate --type doc --preset all --strategy missing-only --no-progress --concurrency 3 && scribe translate --type changelog --preset all --strategy missing-only --no-progress --concurrency 3",
-    "build": "scribe validate && next build",
+    "build": "scribe validate && node scripts/export-static.mjs && next build",
     "start": "next start",
-    "scribe": "scribe"
+    "scribe": "scribe",
+    "i18n:status": "node scripts/translate-messages/cli.mjs status",
+    "i18n:translate": "node scripts/translate-messages/cli.mjs translate"
   },
   "dependencies": {
     "@next/third-parties": "^16.2.9",
