@@ -1,0 +1,44 @@
+---
+title: "Translating a Next.js site with Gemini, without breaking production"
+description: "How to machine-translate MDX content with the Gemini Batch API at half the token price, validate every response before it is stored, and only pay for what actually changed."
+publishedAt: "2026-07-08"
+---
+
+Machine translation is cheap enough to translate an entire site into ten languages for less than a coffee. The hard part was never the model. It is everything around it: knowing what needs translating, catching the model's mistakes before they reach production, and not paying to retranslate 500 pages because you fixed a typo in one.
+
+This post walks through how Scribe handles each of those, using this site (ten locales, every page translated) as the running example.
+
+## Only translate what changed
+
+Every translatable document gets a hash of its translatable content: the marked frontmatter fields plus the MDX body. Each stored translation remembers the hash it was made from. The worklist for a translation run is simply every (document, locale) pair where the hashes disagree or no translation exists.
+
+That gives you two properties worth having:
+
+- Fixing a typo in one file stales exactly one document, in every locale.
+- Running `scribe translate` twice in a row does nothing the second time.
+
+Before spending anything, `scribe translate --dry-run` prints the worklist with estimated tokens and cost per item. Grouping same-day releases on our changelog, for example, showed up as 18 pending items at an estimated $0.07 before we committed to it.
+
+## Half price through the Batch API
+
+By default, translation runs through the Gemini Batch API, which bills input and output tokens at 50% of the interactive rate. All requests are planned and submitted up front, then polled together. Jobs are persisted in the SQLite store the moment they are submitted, so you can quit during polling and run `scribe translate` again later to pick up where it left off.
+
+Prompts are also structured so the English content forms an identical prefix across all target locales. When one page is translated into nine languages, Gemini's implicit context caching discounts the repeated input tokens. The per-locale instruction sits at the end of the prompt, where it does not break the shared prefix.
+
+## Validate before storing, not after deploying
+
+The model will occasionally return something broken: invalid MDX, a hallucinated field, a truncated string. The rule that keeps this survivable is simple: nothing enters the store unvalidated.
+
+Every response is parsed as MDX and re-checked against the document's Zod schema. A failed response fails that item, not your site. At the end of the run, failed items are retried once with the validation errors fed back to the model, which fixes the majority of them. Anything that fails twice is reported and left untranslated, and your build keeps serving English for that locale in the meantime.
+
+## Translation vs transcreation
+
+Literal translation reads like a manual. Scribe's built-in prompt frames the task as transcreation instead: the model writes as a native-speaker copywriter producing the localized edition of the text. It carries the intent of each sentence rather than mirroring the source syntax, recreates wordplay and idioms instead of rendering them literally, and applies native typographic conventions.
+
+You can steer it further with `translate.context` (what the site is about, brand terms to keep in English) and `translate.rules` (house style constraints) in your config. See the [translation guide](/docs/translation) for the full set of options.
+
+## What this costs in practice
+
+This site has a landing page, a docs section, a changelog, and now a blog, translated into nine non-English locales. A full retranslation from scratch is a few dollars. The incremental runs that follow normal editing are cents. The expensive part of multilingual sites was never the tokens; it was the coordination. Hash-based staleness removes the coordination.
+
+Start with the [getting started guide](/docs/getting-started), then run your first translation with the [CLI reference](/docs/cli) open.

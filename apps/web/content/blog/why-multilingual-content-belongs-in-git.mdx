@@ -1,0 +1,57 @@
+---
+title: "Why multilingual content belongs in git"
+description: "Hosted CMS databases and translation platforms give you three sources of truth that drift apart. Keeping English MDX, translations, and history in one repo fixes that. Here is the model behind Scribe."
+publishedAt: "2026-07-08"
+---
+
+Most multilingual sites end up with three sources of truth: content in a hosted CMS, translations in a translation platform, and code in git. Each one has its own versioning, its own access control, and its own idea of what "current" means. Keeping them in sync is a job, and drift is the default state.
+
+There is a simpler model: put everything in the repo.
+
+## What git already solves
+
+Your code workflow already handles the hard problems of content management:
+
+- **Review.** A content change is a pull request. Someone reads the diff before it ships.
+- **Rollback.** A bad edit is a revert, not a support ticket.
+- **Atomicity.** Content and the code that renders it deploy together. A schema change and the content migration for it land in one commit.
+- **History.** `git log` answers "who changed this and when" without a plugin.
+
+A file-based CMS gets all of this for free. The question is what happens when you multiply every page by ten locales.
+
+## The translation problem
+
+The naive approach is one file per locale: `about.en.mdx`, `about.fr.mdx`, `about.ja.mdx`. It falls apart quickly. Ten locales turn a 50 page site into 500 files, review becomes impossible for languages nobody on the team reads, and there is no way to know whether `about.fr.mdx` reflects the current English text or the version from three months ago.
+
+[Scribe](/docs/getting-started) splits the two concerns:
+
+- **English content is MDX files.** One file per document, validated against a Zod schema. This is the part humans write and review.
+- **Translations live in one SQLite file, committed next to them.** Each translation is keyed to a hash of its English source, along with a snapshot of what that source looked like.
+
+The hash is what kills drift. Edit one paragraph of English and exactly one document becomes stale, in every locale, visibly. Run [`scribe translate`](/docs/translation) and only that document is retranslated. Nothing silently lags behind, and `scribe status` shows the exact coverage at any commit.
+
+## No server, by construction
+
+Because everything is files in the repo, there is nothing to host. The runtime reads MDX and SQLite from disk at build time and hands your framework fully typed documents: lists, lookups, relations, hreflang alternates, and sitemap entries. There is no CMS API to call at request time, no tokens to rotate, and no vendor outage that can take your content down. See the [runtime API](/docs/runtime-api) for how reads work.
+
+## Files are how AI agents work best
+
+There is a newer argument for this model, and it might be the strongest one: AI agents are good at repos. A coding agent already knows how to search files, read MDX as plain text, edit it on a branch, and open a pull request. Point one at a hosted CMS instead and you are wiring APIs, tokens, and custom integrations before it can change a headline.
+
+The guardrails transfer too. Frontmatter is validated against your Zod schema and every body has to compile as MDX, so an agent cannot store a malformed document; [`scribe validate`](/docs/cli) catches it before the build does. And since every edit is a commit, AI changes get the same treatment as human ones: a diff, a review, an approval. This site works exactly that way; most of its docs and changelog maintenance is done by agents, with humans reviewing the diffs.
+
+## Where this model is not for you
+
+Honesty section. A git-based CMS assumes the people editing content are comfortable with files and pull requests, or that someone technical sits between them and the repo. If your editors need a WYSIWYG interface and a publish button, a hosted CMS is the right call. Scribe ships a local [studio](/docs/studio) for browsing, searching, and inspecting translations, but authoring happens in your editor.
+
+If your team already lives in git, though, adding a second and third system for content and translations mostly adds surface area. One repo, one review flow, one deploy.
+
+## Try it
+
+The whole setup is one config file and a folder of MDX:
+
+```bash
+pnpm add scribe-cms zod better-sqlite3
+```
+
+Start with the [getting started guide](/docs/getting-started), or read how [translation](/docs/translation) works under the hood.

@@ -1,0 +1,40 @@
+---
+title: "A CMS built for AI agents"
+description: "AI agents read, edit, and review content best as plain files in git. How schema validation, inline tokens, and static exports turn a content repo into something an agent can safely maintain."
+publishedAt: "2026-07-08"
+---
+
+Here is a test worth running on any CMS in 2026: give an AI agent a task like "update the pricing page in all ten languages" and count how many custom integrations it needs before it can start. For most hosted systems the answer is an API client, credentials, a schema it cannot see, and a sandbox you hope it respects. For a repo full of MDX files the answer is zero. The agent already has everything it needs: read, grep, edit, diff.
+
+Scribe leans into this. It is a CMS whose entire surface is things agents are already good at.
+
+## Reading: everything is a file
+
+An agent exploring a Scribe project needs no documentation to orient itself. Content types are Zod schemas in one config file, so the shape of every document is readable as code. Documents are MDX files whose file name is the slug. Translations sit in a SQLite store next to them. There is nothing hidden behind an admin panel; the repo is the whole system, and a grep across `content/` really does search all of it.
+
+## Writing: guardrails instead of trust
+
+The risk with agents is not that they cannot write; it is that they occasionally write something subtly broken. Scribe's answer is the same as for humans, applied harder:
+
+- **Schemas gate every document.** Frontmatter must parse against the content type's Zod schema. A hallucinated field or a missing required one fails `scribe validate`, not production.
+- **Bodies must compile.** Every MDX body is compiled at validation time, so a malformed component or broken syntax is caught before the build.
+- **Links cannot silently rot.** Inline relation tokens reference documents by type and slug, and validation errors on any token pointing at a document that does not exist. An agent physically cannot ship a dangling internal link past the validator.
+- **Deletion is planned, not improvised.** `scribe delete` computes the full reference cascade first, and blockers stop the operation. An agent removing a page sees exactly what else is affected.
+
+The result is that "let the agent edit content" stops being scary. The failure mode of a bad edit is a red CLI line, the same as a failing test.
+
+## Reviewing: the diff is the interface
+
+Because every change is a commit, agent work arrives the way your team already reviews work: as a pull request. There is no separate audit log to check and no CMS history to reconcile with git. English snapshots record what each translation was made from, so even AI-translated content has a reviewable provenance trail: this French text came from that English text, with this model, on this date.
+
+The local studio completes the loop for humans. Browse what the agent touched, search across every document, preview bodies with resolved links and images, and check translation coverage at a glance. Agents edit files; humans verify in the studio.
+
+## Serving content to AI, not just with it
+
+The same properties that make Scribe easy for agents to write also make your site easy for AI systems to read. `scribe export-static` writes plain MDX versions of every page, per locale, into a static directory: clean, markup-light text that LLM crawlers and answer engines handle far better than rendered HTML. Your content is AI-legible on both ends of the pipeline.
+
+## This is not hypothetical
+
+This site is the working example. The changelog consolidation, the docs restructure, and most of the content maintenance you are reading were performed by AI agents working in the repo, validated by `scribe validate`, and reviewed by a human as diffs. The [git-based model](/blog/why-multilingual-content-belongs-in-git) was designed for teams; it turned out to be exactly what agents needed too.
+
+If you are building a site that agents will help maintain, start with the [getting started guide](/docs/getting-started) and give one a task. The workflow will feel familiar to it.

@@ -1,0 +1,42 @@
+---
+title: "Multilingual SEO in Next.js: hreflang, sitemaps, and locale fallbacks"
+description: "A practical setup for hreflang alternates, x-default, localized sitemaps, translated slugs, and locale fallback chains in a multilingual Next.js site."
+publishedAt: "2026-07-08"
+---
+
+Translating your content is half of multilingual SEO. The other half is telling search engines what you did: which URL serves which language, which one is the default, and what to serve when a locale has no translation yet. Get it wrong and Google indexes your French pages for English queries, or treats ten translations as duplicate content.
+
+Here is the checklist we implement, and how Scribe generates most of it from content it already knows about.
+
+## hreflang alternates on every page
+
+Every localized page should declare every sibling, including itself, plus an `x-default` pointing at the version for unmatched languages. In Next.js this is the `alternates.languages` field of the page metadata.
+
+The annoying part is translated slugs. If `/docs/getting-started` is `/fr/docs/premiers-pas` in French, your alternate links must use the localized slug, not the English one with a locale prefix. Scribe stores the translated slug with each translation, and the runtime's `alternates()` helper returns the full map per document, so the metadata code is a loop rather than a lookup table you maintain by hand.
+
+Two rules that prevent the common mistakes:
+
+- hreflang must be reciprocal. If the French page lists the German one, the German page must list the French one. Generating both sides from the same store guarantees this.
+- Canonical URLs must be self-referencing per locale. The French page's canonical is the French URL. Pointing every locale's canonical at English tells Google to drop your translations from the index.
+
+## A sitemap that knows about locales
+
+Each URL entry in the sitemap should carry the same alternate links, plus `x-default`. Scribe's `sitemapEntries()` returns one entry per document with all locale URLs and a `lastmod` derived from the built-in `publishedAt` and `updatedAt` fields, so the sitemap stays honest without manual dates.
+
+Documents you retire should not just disappear. Scribe keeps redirects in a per-type `_redirects.json`, and retired URLs 301 to their replacement in every locale, which preserves the link equity you earned.
+
+## Locale fallbacks instead of 404s
+
+What should `/fr-CA/guide` serve if you translated the page into French but not Canadian French? A 404 wastes the translation you have; silently serving English confuses readers.
+
+Scribe resolves through a fallback chain automatically: a regional locale falls back to its base language before English. `fr-CA` tries `fr`, then `en`. `zh-Hant-TW` tries `zh-Hant`, then `zh`, then `en`. The runtime reports which locale was actually served in `actualLocale`, so your layout can label the page honestly, and prerendered params include the fallback URLs so the pages exist at build time.
+
+## Metadata is content too
+
+Titles and meta descriptions are ranking surface, so they should be translated with the same care as the body. In Scribe they are ordinary translatable frontmatter fields, hashed and validated like everything else. The translation prompt is built for transcreation rather than word-for-word translation, which matters for the 60 characters of a title tag more than anywhere else.
+
+## The takeaway
+
+None of this is exotic. It is bookkeeping: alternates, canonicals, sitemaps, redirects, and fallbacks all derived from one question, "which document exists in which locale at which URL". A CMS that stores translations as first-class data can answer that question in one place. Wiring it by hand across a hosted CMS, a translation platform, and your router is where multilingual SEO usually breaks.
+
+See how the pieces fit in the [runtime API guide](/docs/runtime-api), or start from [getting started](/docs/getting-started).
