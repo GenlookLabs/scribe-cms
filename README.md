@@ -1,6 +1,6 @@
 # Scribe CMS
 
-Typed, file-based CMS for multilingual MDX sites.
+The git-based, typed CMS for multilingual MDX sites.
 
 **[scribe.genlook.app](https://scribe.genlook.app)** · [`scribe-cms` on npm](https://www.npmjs.com/package/scribe-cms)
 
@@ -70,7 +70,8 @@ scribe validate                # schemas, MDX bodies, relations, redirects, stor
 scribe translate --locale fr   # translate stale/missing pages (Gemini)
 scribe status                  # translation coverage
 scribe history blog my-post    # EN snapshot timeline for one document
-scribe studio                  # local read-only admin UI
+scribe delete blog my-post     # delete an entry + its translations, with reference cascade
+scribe studio                  # local admin UI: browse, search, preview, delete
 scribe export-static           # raw MDX files for static hosting / crawlers
 ```
 
@@ -83,10 +84,11 @@ Rendered docs: **[scribe.genlook.app/docs](https://scribe.genlook.app/docs)** �
 - [Writing content](./packages/scribe-cms/docs/content.md)
 - [Runtime API](./packages/scribe-cms/docs/runtime-api.md)
 - [Translation](./packages/scribe-cms/docs/translation.md)
+- Feature guides: [inline tokens](./packages/scribe-cms/docs/inline-tokens.md), [assets](./packages/scribe-cms/docs/assets.md), [bodyless types](./packages/scribe-cms/docs/bodyless-types.md), [deletion](./packages/scribe-cms/docs/deletion.md), [studio](./packages/scribe-cms/docs/studio-content.md)
 
 ## Example project
 
-[`apps/web`](./apps/web) is the source for [scribe.genlook.app](https://scribe.genlook.app) — a Next.js site that uses scribe-cms for its own content (landing page, docs, changelog, ten locales). Browse it when you want a real integration to follow.
+[`apps/web`](./apps/web) is the source for [scribe.genlook.app](https://scribe.genlook.app) — a Next.js site that uses scribe-cms for its own content (landing page, docs, blog, changelog, ten locales). Every docs and blog page is also exported as raw Markdown at build time, with a generated [llms.txt](https://scribe.genlook.app/llms.txt). Browse it when you want a real integration to follow.
 
 ## Made by Genlook
 
