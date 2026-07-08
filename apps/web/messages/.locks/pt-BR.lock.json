@@ -1,0 +1,62 @@
+{
+  "Site.blog": {
+    "model": "gemini-3.1-pro",
+    "translated_at": "2026-07-08T16:16:28Z"
+  },
+  "Site.blogLead": {
+    "model": "gemini-3.1-pro",
+    "translated_at": "2026-07-08T16:16:28Z"
+  },
+  "Site.blogTitle": {
+    "model": "gemini-3.1-pro",
+    "translated_at": "2026-07-08T16:16:28Z"
+  },
+  "Site.changelog": {
+    "model": "gemini-3.1-pro",
+    "translated_at": "2026-07-08T16:16:28Z"
+  },
+  "Site.changelogTitle": {
+    "model": "gemini-3.1-pro",
+    "translated_at": "2026-07-08T16:16:28Z"
+  },
+  "Site.docs": {
+    "model": "gemini-3.1-pro",
+    "translated_at": "2026-07-08T16:16:28Z"
+  },
+  "Site.docsLead": {
+    "model": "gemini-3.1-pro",
+    "translated_at": "2026-07-08T16:16:28Z"
+  },
+  "Site.docsSectionFeatures": {
+    "model": "gemini-3.1-pro",
+    "translated_at": "2026-07-08T16:16:28Z"
+  },
+  "Site.docsSectionGuides": {
+    "model": "gemini-3.1-pro",
+    "translated_at": "2026-07-08T16:16:28Z"
+  },
+  "Site.docsSectionReference": {
+    "model": "gemini-3.1-pro",
+    "translated_at": "2026-07-08T16:16:28Z"
+  },
+  "Site.docsSectionStart": {
+    "model": "gemini-3.1-pro",
+    "translated_at": "2026-07-08T16:16:28Z"
+  },
+  "Site.docsTitle": {
+    "model": "gemini-3.1-pro",
+    "translated_at": "2026-07-08T16:16:28Z"
+  },
+  "Site.footerGithub": {
+    "model": "gemini-3.1-pro",
+    "translated_at": "2026-07-08T16:16:28Z"
+  },
+  "Site.footerNpm": {
+    "model": "gemini-3.1-pro",
+    "translated_at": "2026-07-08T16:16:28Z"
+  },
+  "Site.github": {
+    "model": "gemini-3.1-pro",
+    "translated_at": "2026-07-08T16:16:28Z"
+  }
+}

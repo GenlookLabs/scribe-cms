@@ -1,0 +1,13 @@
+{
+  "$comment": "Adapted from FittingRoom's scripts/translate-messages for scribe-crm. Editable translation context. `brand` terms are never translated (kept in English). `terms` maps recurring product vocabulary to its established translation per locale; only the target locale's column is injected into prompts, and a missing locale means no established form yet (the model chooses). `style` is a single global style note injected into every prompt. This is a minimal starter — add terms as translations settle.",
+  "style": "Prefer what developers in the target market actually say. English loanwords are fine, and preferred, when they are more common in the target locale than a fully translated equivalent (frequent with developer-tooling, SaaS and web vocabulary). Never use em dashes; rephrase with commas, parentheses, colons, or separate sentences. For formality and register, match the existing translations shown in the prompt.",
+  "brand": [
+    "scribe-cms",
+    "Scribe",
+    "Genlook",
+    "MDX",
+    "Zod",
+    "Gemini"
+  ],
+  "terms": {}
+}
