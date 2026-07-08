@@ -1,6 +1,7 @@
 ---
 title: "Configuration"
 description: "Every scribe.config.ts option: project settings, content types, field markers, and locale routing."
+section: guides
 order: 2
 ---
 
@@ -26,9 +27,9 @@ export default defineConfig({
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `rootDir` | — (required) | Project root. Keep it relative (usually `"."`): the CLI resolves it against the config file's directory, `createScribe` against `process.cwd()`. Don't build it from `import.meta.url` — bundlers inline that path at build time, which breaks on serverless hosts like Vercel. |
+| `rootDir` | — (required) | Project root. Keep it relative (usually `"."`): the CLI resolves it against the config file's directory, `createScribe` against `process.cwd()`. Don't build it from `import.meta.url`: bundlers inline that path at build time, which breaks on serverless hosts like Vercel. |
 | `contentDir` | `"content"` | Directory containing one folder per content type. |
-| `store` | `".scribe/store.sqlite"` | SQLite translation store. **Commit it — do not gitignore `.scribe/`.** |
+| `store` | `".scribe/store.sqlite"` | SQLite translation store. **Commit it; do not gitignore `.scribe/`.** |
 | `assetsDir` | — | Static assets root (e.g. `"public"`). When set, `scribe validate` warns about image paths in frontmatter or bodies that don't exist on disk. |
 | `locales` | — (required) | All locales, including the default one. |
 | `defaultLocale` | `"en"` | Canonical source locale. Must appear in `locales`. |
@@ -89,7 +90,7 @@ const schema = z.object({
 });
 ```
 
-Translatable markers also work on fields nested inside plain arrays or objects (e.g. `sections.*.title`) — just don't wrap the containing array in `field.structural`, or the whole subtree becomes English-only.
+Translatable markers also work on fields nested inside plain arrays or objects (e.g. `sections.*.title`); just don't wrap the containing array in `field.structural`, or the whole subtree becomes English-only.
 
 ### `field.relation(typeId, options?)`
 
@@ -99,9 +100,9 @@ Translatable markers also work on fields nested inside plain arrays or objects (
 | `optional` | `false` | The field may be omitted. `related()` then returns `null` (single) or skips missing items (multiple). |
 | `min` / `max` | — | Item count bounds (`multiple: true` only). |
 
-Constraints go in the options object — **not** chained Zod methods. Chaining (`.max(8)`, `.optional()`) clones the schema and would strip the relation metadata.
+Constraints go in the options object: **not** chained Zod methods. Chaining (`.max(8)`, `.optional()`) clones the schema and would strip the relation metadata.
 
-Relations always store **English slugs**, are checked by `scribe validate` (a dangling required relation is a build-blocking error; a dangling optional one is a warning), and are dereferenced at runtime with `related()` — see the [runtime API](/docs/runtime-api).
+Relations always store **English slugs**, are checked by `scribe validate` (a dangling required relation is a build-blocking error; a dangling optional one is a warning), and are dereferenced at runtime with `related()`; see the [runtime API](/docs/runtime-api).
 
 ## Locale fallback chains
 

@@ -1,0 +1,102 @@
+---
+title: "Assets"
+description: "Declare validated asset fields with field.asset(), constrain paths and formats, and resolve them to public URLs at read time."
+section: features
+order: 7
+---
+
+Scribe treats static assets (images today) as first-class, schema-declared references instead of loose strings. The core principle: **components never build asset URLs by string concatenation.** Frontmatter stores a canonical *source reference*; the runtime resolves it to the *served URL* at load time. That single indirection is what lets `publicPath`, CDNs, and content hashing drop in as configuration instead of codebase migrations.
+
+## Configuration
+
+The `assets` config group declares where source files live and how they are served. The bare `assetsDir` still works as a deprecated alias for `{ dir: assetsDir }`.
+
+```ts
+export default defineConfig({
+  // ...
+  assets: {
+    dir: "public",            // where source files live on disk, relative to rootDir. Default "public".
+    publicPath: "/",          // URL prefix they are served under. A path ("/static/") or a CDN origin. Default "/".
+    managedDirs: ["/blog-images"], // extra Scribe-owned web-path roots not covered by any field.asset()
+  },
+});
+```
+
+`publicPath` follows the webpack/Vite convention for this concept. `managedDirs` entries are **source roots**: directories referenced from MDX bodies that aren't tied to a specific asset field.
+
+## `field.asset()`
+
+```ts
+import { field } from "scribe-cms";
+
+const garmentSchema = z.object({
+  title: field.translatable(z.string()),
+  productImage: field.asset({
+    dir: "/try-on/garments",   // value must live under this web path
+    formats: ["webp"],          // extension allowlist
+    maxKB: 150,                 // size budget (warning)
+    optional: false,            // default
+  }),
+});
+```
+
+Like `field.relation()`, **constraints live in the options object, not chained Zod methods**; chaining clones the schema and drops the metadata. Asset fields are always structural: asset paths are never sent to the translator.
+
+| Option | Type | Meaning |
+| --- | --- | --- |
+| `dir` | `string` | Web-path prefix the value must live under. Also declares a managed root. |
+| `template` | `string` | Derived-path template, e.g. `"/try-on/garments/{slug}/product.webp"`. `{slug}` is the entry's English slug. When set, the frontmatter field may be omitted entirely and the loader fills it; an explicit value overrides the template (intentional sharing between entries). |
+| `formats` | `string[]` | Allowed extensions (lowercase, no dot). Violation is a validation warning. |
+| `maxKB` | `number` | File-size budget. Violation is a validation warning. |
+| `optional` | `boolean` | Field may be absent (only meaningful without `template`). A present value whose file is missing is still an error. |
+
+The frontmatter value is a **root-relative web path** into `assets.dir`, e.g. `/try-on/garments/denim-flare/product.webp`, the same convention as a plain image string, no new URI scheme. On disk, frontmatter stores the source reference (or nothing, when templated). Resolved URLs exist only in runtime output; static/raw exports and the translator always see source values.
+
+## Loader resolution
+
+When the runtime loads a document it walks the schema for asset fields and, for each:
+
+1. If the frontmatter value is absent and the field has a `template`, materialize the path from the template (`{slug}` becomes the English slug).
+2. Prefix `assets.publicPath` (joined without double slashes; absolute-origin `publicPath` is supported).
+
+So consumers get final URLs with zero extra calls:
+
+```ts
+const garment = scribe.garment.get("denim-flare");
+garment.frontmatter.productImage;
+// "/try-on/garments/denim-flare/product.webp"                       (publicPath "/")
+// "https://cdn.example.com/try-on/garments/denim-flare/product.webp" (CDN publicPath)
+```
+
+Resolution runs after structural fields are merged onto locale documents, so every locale gets resolved values from the English source.
+
+### `scribe.assets.url(ref)`
+
+An escape hatch for MDX body images and ad hoc cases, applies `publicPath` to a raw reference:
+
+```ts
+scribe.assets.url("/blog-images/hero.webp"); // publicPath applied
+```
+
+You can also reference assets directly in MDX bodies with the [`asset` inline token](/docs/inline-tokens), which resolves the same way at read time.
+
+## Validation
+
+`scribe validate` checks declared asset fields:
+
+- **Missing file for a required asset field**: error (blocks the build, like a dangling required relation).
+- **Missing file for an `optional` field with a present value**: error too; `optional` means the *field* may be absent, not that a stated path may lie.
+- **Value outside the field's `dir`**: error.
+- **Extension not in `formats`**: warning.
+- **File larger than `maxKB`**: warning.
+- Templated fields validate the *materialized* path; the file must exist even though frontmatter omits the value.
+
+Messages carry field attribution, e.g. `garment/denim-flare: productImage → /try-on/garments/denim-flare/product.webp not found`. Separately, image-looking strings collected heuristically from frontmatter and MDX bodies are still reported as warnings when missing, covering body images with zero migration.
+
+## Studio
+
+The [studio](/docs/studio) surfaces assets read-only:
+
+- **Entry inspector** renders asset fields as image previews with the resolved URL, file size, and dimensions; a missing file shows a red badge.
+- **Asset browser** (`/assets`) shows one thumbnail grid per managed root, each asset with its path, size, dimensions, and a "referenced by" list of every entry and field pointing at it. Badges flag unreferenced (orphan candidate), missing-but-referenced, oversized, and format-drift assets.
+- **Gallery view** lets any type with an asset field render its entry list as a card grid, a QA wall for generated imagery.

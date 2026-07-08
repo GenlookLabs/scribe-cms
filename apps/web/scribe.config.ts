@@ -33,10 +33,16 @@ const docSchema = z.object({
   title: field.translatable(z.string().min(1)),
   description: field.translatable(z.string().min(1)),
   order: field.structural(z.number()),
+  section: field.structural(z.enum(["start", "guides", "features", "reference"]).optional()),
 });
 
 const changelogSchema = z.object({
   version: field.structural(z.string().regex(/^\d+\.\d+\.\d+$/)),
+});
+
+const blogSchema = z.object({
+  title: field.translatable(z.string().min(1)),
+  description: field.translatable(z.string().min(1)),
 });
 
 export default defineConfig({
@@ -69,12 +75,20 @@ export default defineConfig({
       id: "doc",
       contentDir: "docs",
       schema: docSchema,
+      path: "/docs/{slug}",
       orderBy: (a, b) => a.frontmatter.order - b.frontmatter.order,
     }),
     defineContentType({
       id: "changelog",
       contentDir: "changelog",
       schema: changelogSchema,
+      orderBy: "-publishedAt",
+    }),
+    defineContentType({
+      id: "blog",
+      contentDir: "blog",
+      schema: blogSchema,
+      path: "/blog/{slug}",
       orderBy: "-publishedAt",
     }),
   ],

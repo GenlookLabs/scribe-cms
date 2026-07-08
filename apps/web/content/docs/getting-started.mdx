@@ -1,6 +1,7 @@
 ---
 title: "Getting started"
-description: "Install scribe-cms, define a schema, write content, and read it back typed — in five steps."
+description: "Install scribe-cms, define a schema, write content, and read it back typed in five steps."
+section: start
 order: 1
 ---
 
@@ -10,7 +11,7 @@ order: 1
 pnpm add scribe-cms zod better-sqlite3
 ```
 
-Requirements: Node 20+, Zod v4. Scribe is framework-agnostic — it works with any Node-based stack. `better-sqlite3` is a native module, so keep it external to your bundler (see the [runtime API](/docs/runtime-api) page).
+Requirements: Node 20+, Zod v4. Scribe is framework-agnostic; it works with any Node-based stack. `better-sqlite3` is a native module, so keep it external to your bundler (see the [runtime API](/docs/runtime-api) page).
 
 ## 1. Create `scribe.config.ts`
 
@@ -51,7 +52,7 @@ export default defineConfig({
 });
 ```
 
-`defineConfig` and `defineContentType` are identity functions that preserve literal types — they are what make `scribe.blog` and `related(doc, "author")` fully typed later.
+`defineConfig` and `defineContentType` are identity functions that preserve literal types; they are what make `scribe.blog` and `related(doc, "author")` fully typed later.
 
 ## 2. Write content
 
@@ -74,7 +75,7 @@ publishedAt: "2026-01-15"
 The body is MDX. **Markdown** and components both work.
 ```
 
-The file name (`hello-world`) is the English slug. `publishedAt` is one of the built-in fields available on every type — see [content model](/docs/content-model).
+The file name (`hello-world`) is the English slug. `publishedAt` is one of the built-in fields available on every type; see [content model](/docs/content-model).
 
 ## 3. Validate
 
@@ -117,4 +118,4 @@ export GEMINI_API_KEY=...   # or put it in .env
 npx scribe translate --locale fr
 ```
 
-Scribe finds every page that is missing or stale in French, translates the fields you marked `field.translatable()`, and stores the result in `.scribe/store.sqlite`. **Commit that directory** — never add `.scribe/` to `.gitignore`. Details in [translation](/docs/translation).
+Scribe finds every page that is missing or stale in French, translates the fields you marked `field.translatable()`, and stores the result in `.scribe/store.sqlite`. **Commit that directory**; never add `.scribe/` to `.gitignore`. Details in [translation](/docs/translation).

@@ -1,0 +1,50 @@
+---
+title: "Studio"
+description: "A local studio to browse content, search across every document, preview MDX bodies, inspect translations, and delete entries safely."
+section: features
+order: 8
+---
+
+```bash
+scribe studio            # http://127.0.0.1:3600
+scribe studio --port 4000
+```
+
+The studio is a local development tool: server-rendered HTML, no build step, no auth, reading your live working tree. Agents and humans **edit files**; the studio is where humans **see and verify** everything Scribe manages: browse collections, inspect entries with resolved relations and asset previews, spot bad or missing imagery, and answer "what uses this?" before changing anything. It also carries the existing translation dashboard (coverage, worklist, per-document snapshots; see [translation](/docs/translation)).
+
+## Collection browser
+
+On `/types/:typeId`, the sidebar lists every content type with entry counts and an aggregate issue badge. The entry table shows each slug, a schema-derived selection of key fields (enums and relations as chips), translation-status dots, and per-entry validation badges.
+
+**Field filters** are derived from schema introspection and live in query params (so URLs are shareable and server-rendered): enum fields become a select, relation fields a select of target slugs, booleans a toggle, strings a contains match.
+
+Any type with at least one asset field can switch the table to a **gallery** card grid; each card is the primary asset image plus slug, key fields, and badges. Filters apply identically. This is the QA wall for generated imagery.
+
+## Entry inspector
+
+`/types/:typeId/:enSlug` renders fields by their introspected kind:
+
+- **translatable**: the value with a locale switcher (data from the store); English fallback is clearly marked when a locale has no translation.
+- **structural**: the plain value.
+- **relation**: a clickable link to the target entry; dangling references show a red badge.
+- **asset**: an image preview with resolved URL, file size, and dimensions; a missing file shows a red badge.
+- **Used by**: a reverse-reference section listing every entry (any type) whose relations point here.
+- **Body**: a Raw / Preview toggle (`?body=preview`). Preview renders Markdown and GFM properly and shows unknown JSX components as labeled boxes with their props; relation tokens become clickable links (dangling ones visibly broken) and asset tokens render as real images. A "view on site" link appears for routable types.
+
+Arrow keys move between entries: `ArrowLeft` / `ArrowRight` navigate to the previous / next entry of the same type in the collection's default order (no wrap-around), preserving the current locale and body-view query params. Keys are ignored while focus is in an input.
+
+## Asset browser
+
+`/assets` shows one thumbnail grid per managed root. Each asset lists its preview, path, size, dimensions, and a **referenced by** list of every entry and field pointing at it, computed live from the in-memory runtime. Badges flag unreferenced (orphan candidate), missing-but-referenced, oversized (over the field `maxKB`), and format drift. See [assets](/docs/assets) for the underlying field system.
+
+## Global search
+
+`/search?q=` runs a case-insensitive substring match over English slugs, every frontmatter value, and raw MDX bodies. A search form sits on every page; results are grouped by type with a highlighted snippet, capped at 20 hits per type.
+
+## Deleting entries
+
+The inspector toolbar has a danger-styled **Delete** button. It opens a confirmation page rendering the full deletion plan in sections (cascades, detaches, affected assets, per-locale store counts, and any blockers), then a red confirm button (or, for a blocked plan, the blockers and no confirm). Confirming executes exactly the plan: the source file, its assets, stored translations and snapshots, and any detach rewrites, and nothing else. A relation's `onTargetDelete` mode (`restrict`, `detach`, or `cascade`) and an asset's `onDelete` mode drive what the plan does; the same plan is available on the command line via [`scribe delete`](/docs/cli#scribe-delete). This is the studio's only mutating route and stays a localhost-only tool.
+
+## What the studio does not do
+
+No content editing, translation triggering, image upload, auth, or true MDX component rendering. Editing stays in your editor and git; the studio is for review.

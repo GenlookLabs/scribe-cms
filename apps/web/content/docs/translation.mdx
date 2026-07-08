@@ -1,19 +1,22 @@
 ---
 title: "Translation"
 description: "How scribe translate works: staleness hashing, Gemini, output validation, cost reporting, and review tools."
+section: guides
 order: 4
 ---
 
-Scribe translates the English source into every other locale with an LLM (Gemini), and stores the results in SQLite. You never edit locale files — you edit English, re-run `scribe translate`, and commit the store.
+Scribe translates the English source into every other locale with an LLM (Gemini), and stores the results in SQLite. You never edit locale files; you edit English, re-run `scribe translate`, and commit the store.
 
 ## What gets translated
 
 Per document, exactly two things go to the translator:
 
-1. Frontmatter fields marked `field.translatable()` — including fields nested inside arrays and objects.
+1. Frontmatter fields marked `field.translatable()`, including fields nested inside arrays and objects.
 2. The MDX body.
 
 Everything else (`field.structural()`, relations, built-in fields) is copied from the English document at load time. With `slugStrategy: "localized"` the translator also produces a per-locale URL slug (ASCII kebab-case, transliterated for non-Latin locales).
+
+A locale you have not translated yet is not a dead end at runtime: `resolve()` serves the closest available translation via the [locale fallback chain](/docs/configuration#locale-fallback-chains) (e.g. `pt-BR` falls back to `pt`, then to the default locale), so you can roll languages out incrementally.
 
 ## Staleness tracking
 
@@ -22,7 +25,7 @@ Each stored translation records a SHA-256 hash of the English translatable conte
 - no translation exists for that locale (**missing**), or
 - the English translatable content changed since (**stale**).
 
-Editing a structural field or a `_redirects.json` entry does **not** mark translations stale — those fields aren't translated.
+Editing a structural field or a `_redirects.json` entry does **not** mark translations stale; those fields aren't translated.
 
 ## Output validation
 
@@ -42,9 +45,9 @@ scribe status                     # coverage per type and locale
 scribe translate                  # interactive picker in a TTY
 scribe translate --locale fr de   # specific locales
 scribe translate --preset active  # a localePresets group from the config
-scribe translate --type blog      # one content type
+scribe translate --type blog      # one content type (comma-separated: --type blog,glossary)
 scribe translate --slug my-post   # one document
-scribe translate --dry-run        # show the worklist, write nothing
+scribe translate --dry-run        # show the worklist + est. tokens/cost, write nothing
 scribe translate --force          # re-translate even when hashes match
 scribe translate --strategy missing-only   # skip stale, only fill gaps
 scribe translate --batch          # force batch mode (the default)
@@ -56,11 +59,13 @@ scribe translate --model gemini-3.1-pro
 
 Run in a terminal, `scribe translate` shows a live progress UI with batch job status, per-item results, running token counts, and an estimated cost in USD. Thinking tokens are included in the reported usage, so the estimate matches what Google bills. Pass `--no-progress` (or run non-interactively, e.g. in CI) for plain line-by-line logging.
 
+`--dry-run` prints the worklist and writes nothing, reporting an estimated token count and USD cost per item and in the totals, computed from the actual prompt and English payload size. Under `--batch` the estimate applies the batch discount, so it previews what the real run will cost.
+
 Then commit `.scribe/store.sqlite`.
 
 ## Batch mode and resuming
 
-By default the whole worklist goes through the Gemini Batch API, which halves the token cost compared to direct calls. Scribe plans every request upfront (one job per model, chunked for very large worklists), submits all jobs at once, then polls them together and stores each job's results the moment it completes. Batch jobs usually finish within minutes, but Google only guarantees completion within 24 hours, so the command waits rather than streaming results page by page.
+By default the whole worklist goes through the Gemini Batch API, which runs at 50% of the token cost of direct calls. Scribe plans every request upfront (one job per model, chunked for very large worklists), submits all jobs at once, then polls them together and stores each job's results the moment it completes. Batch jobs usually finish within minutes, but Google only guarantees completion within 24 hours, so the command waits rather than streaming results page by page.
 
 Every job is recorded in the SQLite store before polling starts, together with a snapshot of the English source each item was submitted from. That makes runs safe to interrupt:
 
@@ -72,6 +77,8 @@ Every job is recorded in the SQLite store before polling starts, together with a
 Prefer immediate, page-by-page results at full price? Use `--direct`, which restores per-page API calls with `--concurrency` parallelism. In a terminal, the interactive picker offers the same choice. Transient API errors (429, 5xx, network drops) are retried automatically with exponential backoff in both modes.
 
 ## Steering the translator
+
+The built-in prompt is built around transcreation, not literal translation. The model writes as a native-speaker copywriter producing the localized edition: it recreates idioms and wordplay rather than rendering them word-for-word, and applies native typographic conventions (quotation marks, apostrophes, punctuation spacing). Your `context`, `rules`, and `prompt` layer on top of that framing.
 
 Project-wide defaults and per-type overrides:
 
@@ -100,7 +107,7 @@ export default defineConfig({
 | --- | --- | --- |
 | `context` | project + type | Brand/domain context prepended to every request (project and type contexts are concatenated). |
 | `rules` | project + type | Extra rules appended to the defaults. |
-| `prompt` | project or type | Replace the default system prompt entirely. |
+| `prompt` | project or type | Extra localization instructions, prepended before the target-locale directive (the locale name and code are always appended). |
 | `defaultModel` / `model` | project / type | Gemini model id. Default: `gemini-3.1-pro` (also overridable via the `PROSE_GEMINI_MODEL` env var or `--model`). |
 
 Built-in rules (always applied) include: do not translate brand names unless they have a well-known local name in the target market, return MDX bodies with real line breaks (not escaped `\n`), and fix JSX attribute quoting when values contain double quotes.

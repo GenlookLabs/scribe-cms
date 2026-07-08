@@ -1,6 +1,7 @@
 ---
 title: "Runtime API"
 description: "createScribe and the full typed client surface: reading, routing helpers, relations, sitemap, redirects, and framework integration."
+section: guides
 order: 5
 ---
 
@@ -13,9 +14,9 @@ const scribe = createScribe(config);
 
 `createScribe()` returns a typed client with one accessor per content type (`scribe.blog`, `scribe.author`, …) plus `scribe.sitemap()`. All reads are synchronous and in-memory: content is loaded once, cached, and (in development) revalidated when files or the translation store change.
 
-The client is plain Node — no framework dependency. It works the same in Next.js, Astro, Remix, SvelteKit, or a build script; the page examples below use Next.js conventions purely as illustrations.
+The client is plain Node, no framework dependency. It works the same in Next.js, Astro, Remix, SvelteKit, or a build script; the page examples below use Next.js conventions purely as illustrations.
 
-Documents have this shape — `frontmatter` is typed from your Zod schema:
+Documents have this shape; `frontmatter` is typed from your Zod schema:
 
 ```ts
 {
@@ -50,7 +51,7 @@ Exact slug lookup in one locale. No fallback, no redirect handling. Returns the 
 
 ### `resolve(slug, locale)`
 
-The full request-path resolution — use this in pages:
+The full request-path resolution; use this in pages:
 
 ```ts
 const r = scribe.blog.resolve(slug, locale);
@@ -74,7 +75,7 @@ if (!resolved.document) notFound();
 
 ### `staticParams(options?)`
 
-Every `{ locale, slug }` pair to prerender — drop it into your framework's static-paths hook (Next.js `generateStaticParams`, Astro `getStaticPaths`, SvelteKit `entries`, …):
+Every `{ locale, slug }` pair to prerender; drop it into your framework's static-paths hook (Next.js `generateStaticParams`, Astro `getStaticPaths`, SvelteKit `entries`, …):
 
 ```ts
 export function generateStaticParams() {
@@ -96,7 +97,7 @@ scribe.blog.alternates(doc);
 // { en: "/blog/hello-world", fr: "/fr/blog/bonjour-le-monde" }
 ```
 
-Feed it to your hreflang tags — e.g. Next.js `metadata.alternates.languages` or hand-rendered link elements.
+Feed it to your hreflang tags, e.g. Next.js `metadata.alternates.languages` or hand-rendered link elements.
 
 ### `translation(doc, targetLocale)`
 
@@ -144,7 +145,7 @@ const entries = await scribe.sitemap({
 });
 ```
 
-Returns plain JSON entries (`url`, `lastModified`, `changeFrequency`, `priority`, hreflang `alternates.languages` including `x-default`) — the shape matches Next.js `MetadataRoute.Sitemap`, and serializes directly into sitemap XML for any other stack. One entry per English document across all routable types; skips `noindex` and redirect source slugs from `_redirects.json`.
+Returns plain JSON entries (`url`, `lastModified`, `changeFrequency`, `priority`, hreflang `alternates.languages` including `x-default`); the shape matches Next.js `MetadataRoute.Sitemap`, and serializes directly into sitemap XML for any other stack. One entry per English document across all routable types; skips `noindex` and redirect source slugs from `_redirects.json`.
 
 Options: `baseUrl` (required), `contentTypes`, `typeDefaults`, `resolveUrl`, `resolvePathname`, `excludeNoindex` (default true), `includeXDefault` (default true).
 
@@ -159,14 +160,14 @@ scribe.listTypes();         // all content types
 scribe.listRoutableTypes(); // only types with a path template
 ```
 
-Useful for generic tooling — e.g. iterating every routable type to build navigation or feeds.
+Useful for generic tooling, e.g. iterating every routable type to build navigation or feeds.
 
 ## Redirects
 
 For statically-exported redirect rules (`_redirects.json`, cross-locale slugs), use the build-script entry:
 
 ```ts
-// scripts/generate-redirects.ts — run before the app build
+// scripts/generate-redirects.ts (run before the app build)
 import {
   buildAllContentRedirects,
   createProject,
@@ -205,14 +206,14 @@ writeStaticRawExports(createProject(loadConfigSync()), { outDir: "public" });
 
 ## Escape hatch
 
-`scribe.<type>.load()` returns the raw `Map<locale, { bySlug, byEnSlug }>` index. Prefer `list`/`get`/`resolve` — `load()` exists for tooling and unusual access patterns.
+`scribe.<type>.load()` returns the raw `Map<locale, { bySlug, byEnSlug }>` index. Prefer `list`/`get`/`resolve`; `load()` exists for tooling and unusual access patterns.
 
 ## Framework integration
 
-Scribe is framework-agnostic — the runtime is plain Node and works in any server-rendered or statically-built stack. Three rules apply everywhere:
+Scribe is framework-agnostic; the runtime is plain Node and works in any server-rendered or statically-built stack. Three rules apply everywhere:
 
 1. Import from **`scribe-cms/runtime`** in app code (it excludes the CLI / translator code paths from bundler tracing); use `scribe-cms` in build scripts.
-2. Keep **`better-sqlite3`** (a native module) and Scribe external to your bundler — e.g. Next.js `serverExternalPackages`, Vite/Astro `ssr.external`, esbuild `external`.
+2. Keep **`better-sqlite3`** (a native module) and Scribe external to your bundler, e.g. Next.js `serverExternalPackages`, Vite/Astro `ssr.external`, esbuild `external`.
 3. Cache the client in a module singleton:
 
 ```ts
@@ -235,7 +236,7 @@ Gate builds on content health: `"build": "scribe validate && <framework build>"`
 // next.config.ts
 const nextConfig = {
   serverExternalPackages: ["better-sqlite3", "scribe-cms", "scribe-cms/runtime"],
-  // Required on Vercel — Scribe reads content/ and .scribe/ at runtime.
+  // Required on Vercel: Scribe reads content/ and .scribe/ at runtime.
   outputFileTracingIncludes: {
     "/**": ["./content/**/*", "./.scribe/**/*"],
   },

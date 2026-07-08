@@ -1,0 +1,94 @@
+---
+title: "Inline tokens"
+description: "Embed links, asset URLs, and untranslatable strings in MDX prose with tokens that update every locale without retranslation."
+section: features
+order: 6
+---
+
+MDX bodies often need a value Scribe already knows: a link to another entry, the public URL of an asset, a literal that must never be translated, or a small per-document string reused in several places. Hard-coding these makes bodies brittle (a renamed slug or moved asset silently breaks links) and pollutes translation (a URL should never be "translated").
+
+Inline tokens solve this. You author a token once in the English body; it resolves per locale at read time, while translation treats it as an opaque, immutable placeholder.
+
+## Syntax
+
+A token is `$\{{<kind>:<args>}}`. There are four kinds:
+
+| Token | Resolves to |
+| --- | --- |
+| `$\{{static:"text"}}` | The verbatim literal `text` (a JSON string, so quotes and escapes are well defined). Never translated, identical in every locale. |
+| `$\{{relation:<typeId>:<enSlug>:href}}` | A **link path** to the target entry (see [relation modes](#relation-modes)). The mode suffix is required. |
+| `$\{{relation:<typeId>:<enSlug>:slug}}` | The target's **English slug** string, a stable identifier for MDX components that load Scribe content themselves. |
+| `$\{{asset:/web/path.webp}}` | The public asset URL (`assets.publicPath` joined to the path). See [assets](/docs/assets). |
+| `$\{{var:key}}` | `frontmatter.vars[key]` of the same document. |
+
+Slugs cannot contain `:`, so relation parsing is unambiguous. A bare `$\{{relation:<typeId>:<enSlug>}}` with no mode suffix is a validation error.
+
+### Relation modes
+
+Every relation token must end with `:href` or `:slug`.
+
+| Mode | Purpose |
+| --- | --- |
+| `:href` | Navigable link. The resolved shape depends on the consumer (below). |
+| `:slug` | Identity: always the target's English slug string. |
+
+`:href` resolves differently depending on who reads the document:
+
+| Consumer | `:href` resolves to |
+| --- | --- |
+| `createScribe()` (app runtime) | Locale-free pathname with the localized slug, e.g. `/for/vestidos`; pass straight to your router's `Link`. |
+| Static `.md` export | Full localized public path with file extension, e.g. `/es/for/vestidos.md`, matching the export file layout. |
+
+### Escape hatch
+
+`$\{{` (a backslash between the dollar sign and the braces) renders a literal `$\{{` and is never treated as a token. Use it to show token syntax in documentation content; this page does exactly that.
+
+## The `vars` frontmatter key
+
+`vars` is an optional `Record<string, string>` any entry may declare **without** adding it to the type schema:
+
+```mdx
+---
+title: Spring sale
+vars:
+  cta: Shop the sale
+---
+
+Ready? $\{{var:cta}}. Limited time only.
+```
+
+`vars` is a reserved key: it is pulled out before schema validation (so a strict schema never rejects it), it is never treated as a translatable field, and it lives only on the English document. Translated documents read `$\{{var:key}}` from their English parent's `vars` map, so there is a single source of truth.
+
+## Hashing and translation
+
+Tokens are extracted before hashing. Each token is replaced by an inert numbered marker (`%%1%%`, `%%2%%`, …, in order of appearance), and that *placeholder body* is what gets hashed and sent to the translator. Consequences:
+
+- **Changing a token's value** (the static text, the relation target, the asset path, or a `var` value) does **not** change the English hash, so no locale goes stale for a value-only edit.
+- **Adding, removing, or reordering tokens** **does** change the hash, so translations restage as expected.
+- **A body with zero tokens** hashes byte-for-byte as before, so adopting tokens causes no mass re-staleness.
+
+The translator is instructed that `%%n%%` markers are immutable: reproduce each exactly once, never translate or renumber them, and move them within a sentence only when grammar requires it. After a translation is received, a post-receive check verifies every marker appears exactly once; a mismatch fails the row so it retries. Stored translated bodies keep the markers and fill them at read time.
+
+## Read-time substitution
+
+Substitution is a read-path concern, gated like asset resolution. `createScribe()` enables it for the app runtime; static exports enable it for the `.md` layout. The CLI, `scribe validate`, and the studio keep raw token syntax so they can introspect and re-hash source bodies.
+
+- **English documents** have their tokens substituted in place, resolved for the default locale.
+- **Translated documents** have their `%%n%%` markers filled using the token list extracted from the **current** English body, resolved for the document's locale; so a relation link always points at the live localized slug even when the translation itself is older.
+
+Two edge cases resolve to an empty string at runtime (and are flagged by `scribe validate`): a relation whose target type has no `path` in `:href` mode, and a missing `var` key.
+
+## Validation
+
+`scribe validate` reports these as entry-level issues:
+
+- **Malformed token syntax** (bad JSON string, wrong arity, unknown kind): error.
+- **`relation`**: unknown `typeId`, unknown `enSlug`, missing mode, or an `:href` relation targeting a non-routable type: error.
+- **`asset`**: the file is missing on disk: error.
+- **`var`**: the key is absent from the document's `vars` map, or `vars` is not a string-to-string record: error.
+
+Raw tokens are masked to inert text before MDX body validation, so a valid token never produces a false MDX parse error.
+
+## Body references and deletion
+
+The studio "Used by" panel and asset browser scan bodies: `$\{{relation:...}}` tokens appear as back-references (field label `body`), and `$\{{asset:...}}` tokens register as declared asset references. Deleting an entry referenced only from another entry's **body** never cascades, detaches, or blocks; see [entry deletion](/docs/cli#scribe-delete). The deletion plan lists such references under a warn-only "body references" section: they will dangle and become validation errors after the deletion.

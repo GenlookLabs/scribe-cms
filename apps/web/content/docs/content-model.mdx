@@ -1,6 +1,7 @@
 ---
 title: "Content model"
 description: "Files, frontmatter, built-in fields, redirects, and what scribe validate checks."
+section: guides
 order: 3
 ---
 
@@ -18,7 +19,7 @@ content/
 ```
 
 - The **file name is the English slug**. Slugs are lowercase kebab-case.
-- Only English files exist on disk — locale versions live in the SQLite store.
+- Only English files exist on disk; locale versions live in the SQLite store.
 - Files whose name starts with `_` or an uppercase letter (e.g. `PUBLISHING.md`) are ignored, so you can keep notes next to your content.
 
 ## Frontmatter
@@ -41,7 +42,7 @@ Schema validation follows your Zod schema: with a plain `z.object` unknown keys 
 
 ## Built-in frontmatter fields
 
-These are available on **every** content type without declaring them in the schema — they are extracted from the frontmatter before your schema runs, so declaring them in your Zod schema has no effect:
+These are available on **every** content type without declaring them in the schema; they are extracted from the frontmatter before your schema runs, so declaring them in your Zod schema has no effect:
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -50,13 +51,35 @@ These are available on **every** content type without declaring them in the sche
 | `noindex` | boolean | Excluded from the sitemap; expose it as a robots meta tag in your pages. |
 | `canonicalPath` | string | Manually override the canonical URL path. |
 
-Locale documents inherit `publishedAt`, `updatedAt`, `noindex`, and `canonicalPath` from their English parent — translators can't change them.
+Locale documents inherit `publishedAt`, `updatedAt`, `noindex`, and `canonicalPath` from their English parent; translators can't change them.
 
 Every loaded document also carries `slug`, `enSlug` (the English parent slug; equal to `slug` for English documents), `locale`, `frontmatter`, and `content`.
 
+## Bodyless types
+
+Reference-only collections (a `model` or `category` type whose schema is entirely structural) often have no MDX body at all. Declare `body: false` on the type to make that explicit:
+
+```ts
+defineContentType({
+  id: "model",
+  contentDir: "models",
+  schema: modelSchema,
+  body: false, // entries are frontmatter-only
+});
+```
+
+The default is `body: true`, so this is fully backwards compatible. On a `body: false` type, any non-whitespace body content is a validation error, the loader skips MDX parsing, and static exports emit no body. A bodyless type with **zero** translatable fields also drops out of every translation workflow (no missing/stale noise); a bodyless type that still has a translatable field stays in the todos with a frontmatter-only payload. See [translation](/docs/translation) for the translatability rule.
+
+## Beyond frontmatter
+
+MDX bodies can do more than plain prose:
+
+- [Inline tokens](/docs/inline-tokens) embed links, asset URLs, and untranslatable literals directly in the body, resolved per locale at read time.
+- [Assets](/docs/assets) declared with `field.asset()` are validated on disk and resolved to public URLs at load time.
+
 ## Redirects: `_redirects.json`
 
-Per content-type folder, add an optional `_redirects.json` file to declare slug migrations and retired documents. Redirects survive after you delete the source MDX — translated source slugs are expanded automatically from SQLite.
+Per content-type folder, add an optional `_redirects.json` file to declare slug migrations and retired documents. Redirects survive after you delete the source MDX; translated source slugs are expanded automatically from SQLite.
 
 ```json
 {
@@ -89,11 +112,11 @@ To retire or rename a document: add an entry to `_redirects.json`, delete (or re
 scribe validate
 ```
 
-Checks, per English file: schema parse, built-in field shapes, your `crossValidate` hook, and **MDX compilation of the body** — a body that doesn't parse as MDX is a build-blocking error, for English sources and stored translations alike.
+Checks, per English file: schema parse, built-in field shapes, your `crossValidate` hook, and **MDX compilation of the body**; a body that doesn't parse as MDX is a build-blocking error, for English sources and stored translations alike.
 
-Across the project it also checks: relation integrity (dangling required relation = error, dangling optional relation = warning), `_redirects.json` rules (valid targets, no duplicate sources, no redirect chains), localized-slug suffix rules, missing image assets when `assetsDir` is set, and that the translation store exists.
+Across the project it also checks: relation integrity (dangling required relation = error, dangling optional relation = warning), `_redirects.json` rules (valid targets, no duplicate sources, no redirect chains), localized-slug suffix rules, [declared asset fields](/docs/assets) (file existence, `formats`, `maxKB`), [inline body tokens](/docs/inline-tokens) (malformed spans, dangling relations, `:href` to non-routable types, missing `vars` keys, missing asset files), `body: false` types that still carry body content, missing image assets when the assets directory is set, and that the translation store exists.
 
-Exit code is non-zero when any error is found — run it before your build:
+Exit code is non-zero when any error is found; run it before your build:
 
 ```json
 {

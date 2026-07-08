@@ -13,24 +13,33 @@ export interface StaticSitemapRoute {
   href: string;
   priority: number;
   changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"];
+  lastModified?: Date;
 }
 
 export const STATIC_SITEMAP_ROUTES: StaticSitemapRoute[] = [
   { href: "/", priority: 1, changeFrequency: "monthly" },
   { href: "/docs", priority: 0.9, changeFrequency: "monthly" },
+  { href: "/blog", priority: 0.8, changeFrequency: "monthly" },
   { href: "/changelog", priority: 0.7, changeFrequency: "monthly" },
 ];
 
 function listSitemapRoutes(): StaticSitemapRoute[] {
-  const docRoutes = getScribe()
-    .doc.list()
-    .map((doc) => ({
-      href: `/docs/${doc.enSlug}`,
-      priority: 0.8,
-      changeFrequency: "monthly" as const,
-    }));
+  const scribe = getScribe();
 
-  return [...STATIC_SITEMAP_ROUTES, ...docRoutes];
+  const docRoutes = scribe.doc.list().map((doc) => ({
+    href: `/docs/${doc.enSlug}`,
+    priority: 0.8,
+    changeFrequency: "monthly" as const,
+  }));
+
+  const blogRoutes = scribe.blog.list().map((post) => ({
+    href: `/blog/${post.enSlug}`,
+    priority: 0.7,
+    changeFrequency: "monthly" as const,
+    lastModified: post.publishedAt ? new Date(post.publishedAt) : undefined,
+  }));
+
+  return [...STATIC_SITEMAP_ROUTES, ...docRoutes, ...blogRoutes];
 }
 
 export async function buildStaticNextRoutes(baseUrl: string): Promise<MetadataRoute.Sitemap> {
@@ -47,7 +56,7 @@ export async function buildStaticNextRoutes(baseUrl: string): Promise<MetadataRo
 
     entries.push({
       url: alternates[routing.defaultLocale]!,
-      lastModified: now,
+      lastModified: route.lastModified ?? now,
       changeFrequency: route.changeFrequency,
       priority: route.priority,
       alternates: { languages: alternates },

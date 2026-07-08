@@ -1,7 +1,8 @@
 ---
 title: "CLI reference"
-description: "Every scribe command and flag: status, validate, translate, history, studio, export-static."
-order: 6
+description: "Every scribe command and flag: status, validate, translate, delete, history, studio, export-static."
+section: reference
+order: 9
 ---
 
 The `scribe` binary ships with the package and is on your PATH after install. All commands accept `--config <path>` (default: `scribe.config.ts` found in the working directory) and read `.env` then `.env.local` before running (existing environment variables win).
@@ -10,6 +11,7 @@ The `scribe` binary ships with the package and is on your PATH after install. Al
 scribe status
 scribe validate
 scribe translate [flags]
+scribe delete <type> <en-slug> [--dry-run] [--yes]
 scribe history <type> <en-slug> [locale]
 scribe studio [--port 3600]
 scribe export-static [flags]
@@ -22,7 +24,7 @@ Per content type: English document count, then translation count per locale, plu
 
 ## `scribe validate`
 
-Validates the whole project — schemas, built-in fields, `crossValidate` hooks, MDX compilation of English bodies and stored translations, relations, `_redirects.json` rules, localized-slug suffixes, and missing image assets when `assetsDir` is set. Prints one line per issue and exits non-zero on errors, so it can gate your build. See [content model](/docs/content-model) for the full list of checks.
+Validates the whole project: schemas, built-in fields, `crossValidate` hooks, MDX compilation of English bodies and stored translations, relations, `_redirects.json` rules, localized-slug suffixes, and missing image assets when `assetsDir` is set. Prints one line per issue and exits non-zero on errors, so it can gate your build. See [content model](/docs/content-model) for the full list of checks.
 
 ## `scribe translate`
 
@@ -30,7 +32,7 @@ Translates missing and stale pages with Gemini (needs `GEMINI_API_KEY`). Run wit
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--type <id>` | all types | One content type. |
+| `--type <id,id>` | all types | One or more content types (comma-separated). |
 | `--locale <code>...` | all non-default locales | Target locales (space-separated). Overrides `--preset`. |
 | `--preset <name>` | - | A `localePresets` group from the config. |
 | `--slug <en-slug>` | - | One English document. |
@@ -45,17 +47,32 @@ Translates missing and stale pages with Gemini (needs `GEMINI_API_KEY`). Run wit
 
 Interactive runs show a live progress bar with batch job status, per-item results, running input/output token counts, and an estimated cost in USD (thinking tokens included). Batch jobs are persisted in the store before polling starts, so interrupting with Ctrl+C is safe: the next run (or `--resume`) picks them back up without double-submitting anything. The command exits non-zero if any item failed. Details in [translation](/docs/translation).
 
+## `scribe delete`
+
+```bash
+scribe delete <type> <en-slug> [--dry-run] [--yes]
+```
+
+Deletes an entry and everything that hangs off it, driven by the reference cascade. It computes a plan up front and prints it grouped by section: cascaded deletions, detached relations, affected asset files, per-locale store counts (translations and snapshots), and any blockers. It then asks `y/N` before executing. Execution performs exactly the plan (source file, store rows, asset files, and detach rewrites) and nothing else.
+
+| Flag | Description |
+| --- | --- |
+| `--dry-run` | Print the plan and exit 0 without deleting anything. |
+| `--yes` | Skip the confirmation prompt (for scripts). |
+
+A relation's `onTargetDelete` mode (`restrict`, `detach`, `cascade`) and an asset field's `onDelete` mode (`delete`, `keep`) decide what the plan does; see [content model](/docs/content-model) for the field options. A plan with blockers (a `restrict` reference or a required single relation that would dangle) prints the blockers and exits 1 without deleting. The [studio](/docs/studio) exposes the same plan behind a Delete button.
+
 ## `scribe history <type> <en-slug> [locale]`
 
 The English snapshot timeline for one document: when each snapshot was captured, its content hash, and which locale translations were made from it. Pass a locale to filter.
 
 ## `scribe studio`
 
-A local, read-only web UI (default `http://127.0.0.1:3600`, change with `--port`). Shows per-type and per-locale translation coverage, the current missing/stale worklist, and per-document detail: frontmatter with translatable/structural markers, the stored translation, its metadata (model, date, hash), and the English snapshot it was made from. It never writes — editing stays in your editor and git.
+A local, read-only web UI (default `http://127.0.0.1:3600`, change with `--port`). Shows per-type and per-locale translation coverage, the current missing/stale worklist, and per-document detail: frontmatter with translatable/structural markers, the stored translation, its metadata (model, date, hash), and the English snapshot it was made from. It never writes; editing stays in your editor and git.
 
 ## `scribe export-static`
 
-Writes raw MDX files (frontmatter + body, per locale) into a static directory — useful for serving crawler/LLM-friendly plain-text versions of your pages:
+Writes raw MDX files (frontmatter + body, per locale) into a static directory, useful for serving crawler/LLM-friendly plain-text versions of your pages:
 
 | Flag | Default | Description |
 | --- | --- | --- |

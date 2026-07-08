@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { setRequestLocale } from "next-intl/server";
 import { Code } from "@/components/Code";
+import { JsonLd } from "@/components/JsonLd";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
@@ -13,6 +14,7 @@ type Props = {
 };
 
 const GITHUB_URL = "https://github.com/GenlookLabs/scribe-cms";
+const SITE_URL = "https://scribe.genlook.app";
 
 const STEP_SNIPPETS: { code: string; lang: string }[] = [
   {
@@ -91,9 +93,26 @@ export default async function HomePage({ params }: Props) {
 
   const doc = getLanding(locale);
   const f = doc.frontmatter;
+  const url = locale === routing.defaultLocale ? SITE_URL : `${SITE_URL}/${locale}`;
 
   return (
     <>
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "SoftwareApplication",
+          name: "Scribe CMS",
+          applicationCategory: "DeveloperApplication",
+          operatingSystem: "Node.js",
+          offers: {
+            "@type": "Offer",
+            price: 0,
+            priceCurrency: "USD",
+          },
+          url,
+          description: f.description,
+        }}
+      />
       <SiteHeader active="/" />
       <main className="mx-auto w-full max-w-3xl flex-1 px-6 pt-14 pb-24">
         {/* Hero */}

@@ -6,6 +6,7 @@ import { LanguageSwitcher } from "./LanguageSwitcher";
 
 const navLinks = [
   { href: "/docs", key: "docs" as const },
+  { href: "/blog", key: "blog" as const },
   { href: "/changelog", key: "changelog" as const },
 ] as const;
 
