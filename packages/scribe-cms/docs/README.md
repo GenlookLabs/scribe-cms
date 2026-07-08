@@ -9,11 +9,27 @@ Scribe is a typed, file-based CMS for multilingual MDX sites.
 
 ## Guides
 
-1. [Getting started](./getting-started.md) — install, first config, first page
-2. [Configuration](./configuration.md) — `scribe.config.ts` reference
-3. [Writing content](./content.md) — files, frontmatter, built-in fields, redirects
-4. [Runtime API](./runtime-api.md) — reading content, routing helpers, relations, sitemap, framework integration
-5. [Translation](./translation.md) — the translate workflow, CLI, and studio
+### Start here
+
+- [Getting started](./getting-started.md) — install, first config, first page
+
+### Core guides
+
+- [Configuration](./configuration.md) — `scribe.config.ts` reference
+- [Writing content](./content.md) — files, frontmatter, built-in fields, redirects
+- [Runtime API](./runtime-api.md) — reading content, routing helpers, relations, sitemap, framework integration
+- [Translation](./translation.md) — the translate workflow, CLI, and studio
+
+### Feature guides
+
+- [Inline tokens](./inline-tokens.md) — `${{…}}` body tokens (static, relation, asset, var) and how they interact with translation
+- [Assets](./assets.md) — `field.asset()`, loader URL resolution, and asset validation
+- [Bodyless types](./bodyless-types.md) — frontmatter-only content types and derived translatability
+- [Entry deletion](./deletion.md) — `scribe delete` and the reference cascade
+
+### Studio
+
+- [Studio: content management](./studio-content.md) — read-only browsing of collections, entries, and assets
 
 ## How it fits together
 

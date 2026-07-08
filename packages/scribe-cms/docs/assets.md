@@ -1,8 +1,11 @@
 # Asset management
 
-> Status: **spec** — phase 1 in progress. This document is the design source of
-> truth for Scribe's asset system; sections are marked with the phase that
-> implements them.
+> Status: phase 1 (`field.asset()`, loader resolution, validation) is
+> **implemented** as of 0.0.19. Phases 2-3 (the `scribe assets audit/clean/mv`
+> CLI) are **not yet implemented**. Studio content and asset browsing has
+> shipped (see [studio-content.md](./studio-content.md)). This document is the
+> design source of truth for Scribe's asset system; sections are marked with
+> the phase that implements them.
 
 Scribe treats static assets (images today; files later) as first-class,
 schema-declared references instead of loose strings. The system has three
@@ -188,10 +191,12 @@ table later doubles as the preprocessing cache/manifest.
   store; a hand-rename silently breaks every locale until full
   retranslation — this command is the safe path.)
 
-## Studio *(phase 4, read-only)*
+## Studio *(read-only — shipped)*
 
-Same architecture (Hono, server-rendered, no build step). New surfaces on top
-of schema introspection:
+The studio content and asset browsing surfaces below are implemented; see
+[studio-content.md](./studio-content.md) for the shipped behavior. Same
+architecture (Hono, server-rendered, no build step). Surfaces on top of schema
+introspection:
 
 - **Collection browser** — sidebar of content types; per-type entry table
   with key fields, translation status (existing status dots), validation

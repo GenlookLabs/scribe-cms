@@ -26,9 +26,13 @@ Agents and humans **edit files**; the studio is where humans **review**.
 
 ## Non-goals (v1)
 
-Editing, translation triggering, image upload, auth/multi-user, true MDX
-component rendering, deployment/snapshot builds. The existing translation
+Content editing, translation triggering, image upload, auth/multi-user, true
+MDX component rendering, deployment/snapshot builds. The existing translation
 views stay as they are.
+
+Entry **deletion** shipped later and is the exception: a studio Delete button
+posts to `POST /types/:typeId/:enSlug/delete` (the studio's first mutating
+route). Field editing remains out of scope. See [deletion.md](./deletion.md).
 
 ## Surfaces
 

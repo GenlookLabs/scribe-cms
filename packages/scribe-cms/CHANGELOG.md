@@ -65,6 +65,32 @@
 
 - Always append the target locale to translation prompts, even when `translate.prompt` is set.
 
+## 0.0.15 — 2026-07-06
+
+### Fixed
+
+- Failed translations are retried once automatically at the end of the run, with the validation errors fed back to the model so it can fix them. Batch runs retry as one extra batch job at the batch rate; the summary shows `+N on retry`, and anything that fails twice is logged again with its new error.
+
+## 0.0.14 — 2026-07-06
+
+### Added
+
+- Automatic locale fallback chains: a regional locale with no translation of a page is served its base language before English (`fr-CA` falls back to `fr`, `zh-Hant-TW` tries `zh-Hant`, then `zh`). `resolve()` reports the served locale in `actualLocale`. On by default; set `localeFallbacks: false` to disable.
+
+## 0.0.13 — 2026-07-06
+
+### Added
+
+- `scribe translate` now runs through the Gemini Batch API by default, cutting token costs by 50%. Requests are planned and submitted upfront, then polled together and ingested as each job completes.
+- Resumable runs: batch jobs and their items are persisted in the SQLite store the moment they are submitted, so quitting during polling loses nothing. `scribe translate --resume` (or re-running `scribe translate`) picks pending jobs back up.
+- New `--batch` and `--direct` flags choose the mode explicitly.
+- Transient Gemini errors (429, 5xx, network drops) are retried automatically with exponential backoff.
+
+### Changed
+
+- Translation prompts restructured so the English content forms an identical prefix across all locales, letting Gemini implicit context caching discount repeated input tokens.
+- Model thinking is turned down to the minimum; thinking tokens are now counted in the reported usage so cost estimates match what Google bills. Batch results are priced at the 50% batch rate.
+
 ## 0.0.12 — 2026-06-17
 
 ### Fixed

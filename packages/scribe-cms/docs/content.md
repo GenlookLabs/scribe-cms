@@ -105,11 +105,20 @@ file still on disk.
 scribe validate
 ```
 
-Checks, per English file: schema parse, built-in field shapes, your
-`crossValidate` hook, **MDX compilation of the body** (English sources and
-stored translations alike — a body that doesn't parse as MDX is an error),
-relation integrity (dangling required relation = error, dangling optional
-relation = warning), `_redirects.json` rules, localized-slug suffix rules, and
-missing image assets when `assetsDir` is set.
+`validateProject()` checks:
+
+- **Schema parse** and built-in field shapes, plus your `crossValidate` hook.
+- **MDX compilation of the body** — English sources and stored translations
+  alike; a body that doesn't parse as MDX is an error.
+- **Relation integrity** — dangling required relation = error, dangling
+  optional relation = warning.
+- **`_redirects.json` rules** and **localized-slug suffix rules**.
+- **Declared `field.asset()` fields** — file existence, `formats` allowlist,
+  and `maxKB` size caps.
+- **Inline body tokens** — malformed spans, dangling relations, `:href` to
+  non-routable types, missing `vars` keys, and missing asset files.
+- **Bodyless types** (`body: false`) that still carry body content.
+- Missing image assets found heuristically when the `assets` config group is
+  set (legacy `assetsDir` still works as an alias for `assets.dir`).
 
 Exit code is non-zero when any error is found — run it before your build.

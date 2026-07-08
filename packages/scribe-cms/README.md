@@ -4,7 +4,7 @@ Typed, file-based CMS for multilingual MDX. English source files on disk, locale
 
 Scribe has no framework dependency — it reads files and SQLite in-process and works with any Node-based stack (Next.js, Astro, Remix, SvelteKit, a static-site script, …). Examples in these docs use Next.js, but nothing about Scribe is Next-specific.
 
-**Docs:** [scribe.genlook.app/docs](https://scribe.genlook.app/docs) · [Getting started](./docs/getting-started.md) · [Configuration](./docs/configuration.md) · [Writing content](./docs/content.md) · [Runtime API](./docs/runtime-api.md) · [Translation](./docs/translation.md)
+**Docs:** [scribe.genlook.app/docs](https://scribe.genlook.app/docs) · [All guides](./docs/README.md) · [Getting started](./docs/getting-started.md) · [Configuration](./docs/configuration.md) · [Writing content](./docs/content.md) · [Runtime API](./docs/runtime-api.md) · [Translation](./docs/translation.md) · Feature guides: [inline tokens](./docs/inline-tokens.md), [assets](./docs/assets.md), [deletion](./docs/deletion.md), [bodyless types](./docs/bodyless-types.md)
 
 ## Install
 
@@ -62,6 +62,8 @@ Content lives in `content/blog/*.mdx` and `content/authors/*.mdx`. The file
 name is the EN slug. Frontmatter is validated against the schema; the built-in
 fields `publishedAt`, `updatedAt`, `noindex`, and `canonicalPath` are available
 on every type without declaring them. Redirects live in `content/<type>/_redirects.json`.
+MDX bodies can also embed inline `${{…}}` tokens for static text, relations,
+assets, and vars; see [inline tokens](./docs/inline-tokens.md).
 
 ### 2. Field markers
 

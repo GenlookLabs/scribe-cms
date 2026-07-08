@@ -65,9 +65,9 @@ scribe status                     # coverage per type and locale
 scribe translate                  # everything missing/stale, all locales
 scribe translate --locale fr de   # specific locales
 scribe translate --preset active  # a localePresets group from the config
-scribe translate --type blog      # one content type
+scribe translate --type blog      # one content type (comma-separated: --type blog,glossary)
 scribe translate --slug my-post   # one document
-scribe translate --dry-run        # show the worklist, write nothing
+scribe translate --dry-run        # show the worklist + est. tokens/cost, write nothing
 scribe translate --force          # re-translate even when hashes match
 scribe translate --strategy missing-only   # skip stale, only fill gaps
 scribe translate --batch          # force batch mode (the default)
@@ -83,6 +83,10 @@ Thinking tokens are included in the reported usage, so the estimate matches
 what Google bills. Pass `--no-progress` (or run non-interactively, e.g. in CI)
 for plain line-by-line logging. Without flags in a TTY, it interactively asks
 for content type, locale preset, strategy, and translation mode.
+
+`--dry-run` prints the worklist and writes nothing, and reports an estimated
+token count and cost for each item, computed from the actual prompt and EN
+payload size. Under `--batch` the estimate applies the batch discount.
 
 Then commit `.scribe/store.sqlite`.
 
@@ -135,6 +139,14 @@ command exits non-zero: bad model output never reaches the store, so it can
 never reach production.
 
 ## Steering the translator
+
+The built-in prompt is built around transcreation, not literal translation: the
+model writes as a native-speaker copywriter producing the localized edition,
+recreating idioms and wordplay rather than rendering them word-for-word and
+applying native typographic conventions (quotation marks, apostrophes,
+punctuation spacing). See `src/translate/prompts/translation-prompt.ts`
+(`TASK_FRAMING`) for the exact behavior. Your `context`, `rules`, and `prompt`
+layer on top of it.
 
 Project-wide defaults and per-type overrides:
 
@@ -206,6 +218,7 @@ scribe translate --preset ultraLight
 | `scribe validate`                          | Schemas, MDX bodies, relations, redirects, slugs, assets. Non-zero exit on errors. |
 | `scribe translate [flags]`                 | Translate missing/stale pages. Flags above.                                     |
 | `scribe history <type> <en-slug> [locale]` | EN snapshot timeline for one document.                                          |
+| `scribe delete <type> <en-slug>`           | Plan + execute entry deletion with a reference cascade (source file, assets, translations, snapshots). Supports `--dry-run`, `--yes`. See [deletion](./deletion.md). |
 | `scribe studio [--port 3600]`              | Local read-only admin UI.                                                       |
 | `scribe export-static [flags]`             | Write raw MDX files for static hosting (`--out`, `--extension`, `--type`, `--locale`). |
 
