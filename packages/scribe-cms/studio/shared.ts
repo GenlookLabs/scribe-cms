@@ -20,10 +20,20 @@ export function assetPreviewUrl(webPath: string): string {
   return `/asset?p=${encodeURIComponent(webPath)}`;
 }
 
+/** A document's display title: its frontmatter `title`, falling back to the EN slug. */
+export function docTitleFromFrontmatter(
+  frontmatter: Record<string, unknown>,
+  enSlug: string,
+): string {
+  const title = frontmatter.title;
+  if (typeof title === "string" && title.trim()) return title;
+  return enSlug;
+}
+
 export interface LayoutOptions {
   /** Highlighted content type in the sidebar. */
   activeTypeId?: string;
-  /** Highlighted top-level nav entry ("dashboard" | "assets" | typeId). */
+  /** Highlighted top-level nav entry ("content" | "translations" | "assets"). */
   activeNav?: string;
   /** Current query to prefill the sidebar search box. */
   searchQuery?: string;
@@ -94,6 +104,15 @@ a:hover { text-decoration: underline; }
 .tree-label { font-size: var(--fs); }
 .tree-meta { font-size: var(--fs-sm); color: var(--dim); }
 .tree-item .tree-label .badge { float: right; }
+/* per-type "+" affordance: subtle, revealed on row hover */
+.tree-row { position: relative; }
+.tree-new {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
+  color: var(--dim); font-size: 15px; line-height: 1; border-radius: 3px; opacity: 0;
+}
+.tree-row:hover .tree-new { opacity: 1; }
+.tree-new:hover { color: var(--text); background: var(--active); text-decoration: none; }
 
 /* main */
 .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
@@ -191,6 +210,29 @@ details[open] summary { margin-bottom: 4px; }
 
 /* ---- content management additions ---- */
 
+/* content home (type cards) */
+.home-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px; padding: 12px;
+}
+.home-card {
+  display: flex; align-items: stretch; background: var(--sidebar);
+  border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+}
+.home-card-main {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;
+  padding: 10px 12px; color: var(--text);
+}
+.home-card-main:hover { background: var(--hover); text-decoration: none; }
+.home-card-label { font-size: var(--fs); font-weight: 600; }
+.home-card-meta { font-size: var(--fs-sm); color: var(--dim); }
+.home-card-new {
+  display: flex; align-items: center; padding: 0 12px; flex-shrink: 0;
+  border-left: 1px solid var(--border); color: var(--accent);
+  font-size: var(--fs-sm); white-space: nowrap;
+}
+.home-card-new:hover { background: var(--hover); text-decoration: none; }
+
 /* chips (enum / relation values) */
 .chip {
   display: inline-flex; align-items: center; gap: 3px; padding: 0 6px;
@@ -255,6 +297,29 @@ details[open] summary { margin-bottom: 4px; }
 .asset-preview .frame img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .asset-preview .info { font-size: var(--fs-sm); }
 .asset-preview .info .mono { font-family: var(--mono); color: #ce9178; }
+
+/* field help text (Zod .describe()) under the field key */
+.kv .k .field-desc {
+  color: var(--dim); font-weight: 400; white-space: normal; word-break: break-word;
+  font-size: 10px; margin-top: 2px; max-width: 150px;
+}
+
+/* multiple-asset thumbnail strip (inspector) */
+.asset-strip { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; }
+.asset-strip .frame {
+  width: 72px; height: 72px; flex-shrink: 0; border: 1px solid var(--border); border-radius: 4px;
+  background: #111 repeating-linear-gradient(45deg, #1a1a1a 0 8px, #161616 8px 16px);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.asset-strip .frame img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.asset-strip .frame .noimg { color: var(--dim); font-size: 10px; }
+
+/* gallery "+N" badge for multiple-asset cards */
+.gcard .thumb { position: relative; }
+.gcard .thumb .plusn {
+  position: absolute; right: 4px; bottom: 4px; padding: 0 6px; height: 16px; line-height: 16px;
+  border-radius: 8px; font-size: 10px; background: rgba(0,0,0,0.65); color: #fff;
+}
 
 /* asset browser grid */
 .asset-grid {
@@ -371,6 +436,96 @@ mark { background: #3a3320; color: var(--stale); border-radius: 3px; padding: 0 
 .mdx-preview .mdx-relation-chip { display: inline-block; padding: 0 6px; border-radius: 3px; background: var(--active); color: var(--accent); text-decoration: none; font-size: var(--fs-sm); }
 .mdx-preview .mdx-relation-chip:hover { text-decoration: underline; }
 .mdx-preview .mdx-relation-broken { display: inline-block; padding: 0 6px; border-radius: 3px; background: rgba(244,135,113,0.12); color: var(--missing); text-decoration: line-through; font-size: var(--fs-sm); }
+
+/* ---- accent buttons (toolbar "New entry" / "Edit", primary Save) ---- */
+.btn-accent {
+  color: var(--accent); border: 1px solid currentColor; border-radius: 4px; padding: 2px 8px;
+  background: transparent; font: var(--fs-sm) var(--ui); text-decoration: none; cursor: pointer;
+  margin-left: 6px; white-space: nowrap;
+}
+.btn-accent:hover { background: rgba(55,148,255,0.12); text-decoration: none; }
+.btn-primary {
+  color: #ffffff; background: var(--accent); border: 1px solid var(--accent); border-radius: 4px;
+  padding: 4px 12px; font: var(--fs) var(--ui); text-decoration: none; cursor: pointer;
+}
+.btn-primary:hover { background: #2f83e6; border-color: #2f83e6; text-decoration: none; }
+
+/* ---- entry create/edit form ---- */
+.entry-form { max-width: 760px; padding: 12px 16px 32px; }
+.form-field { margin: 0 0 16px; }
+.form-field > label {
+  display: block; font-size: var(--fs); font-weight: 600; color: var(--text); margin-bottom: 2px;
+}
+.form-field .req { color: var(--missing); font-weight: 700; }
+.form-field .field-help { font-size: var(--fs-sm); color: var(--dim); margin: 0 0 5px; }
+.form-field .field-error { font-size: var(--fs-sm); color: var(--missing); margin-top: 4px; }
+.form-field input[type=text],
+.form-field input[type=number],
+.form-field select,
+.form-field textarea {
+  width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 3px; font: var(--fs) var(--ui); padding: 5px 7px;
+}
+.form-field input[type=file] {
+  width: 100%; color: var(--dim); font: var(--fs-sm) var(--ui); padding: 4px 0;
+}
+.form-field textarea { resize: vertical; }
+.form-field textarea.yaml { min-height: 120px; font: var(--fs-sm)/1.5 var(--mono); }
+.form-field textarea.body-editor { min-height: 320px; font: var(--fs-sm)/1.5 var(--mono); }
+.form-field input:focus, .form-field select:focus, .form-field textarea:focus {
+  outline: none; border-color: var(--accent);
+}
+.form-field label.checkbox {
+  display: inline-flex; align-items: center; gap: 5px; font-weight: 400; font-size: var(--fs);
+  color: var(--text); margin: 0;
+}
+/* ---- searchable relation picker ---- */
+.form-field .rel-picker {
+  border: 1px solid var(--border); border-radius: 3px; background: var(--bg);
+}
+.form-field .rel-filter {
+  display: block; width: 100%; background: var(--bg); color: var(--text);
+  border: 0; border-bottom: 1px solid var(--border); border-radius: 3px 3px 0 0;
+  font: var(--fs) var(--ui); padding: 5px 7px;
+}
+.form-field .rel-filter:focus { outline: none; border-bottom-color: var(--accent); }
+.form-field .rel-count {
+  font-size: var(--fs-sm); color: var(--dim); padding: 3px 8px 0;
+}
+.form-field .rel-options {
+  display: flex; flex-direction: column; gap: 1px; max-height: 240px; overflow-y: auto;
+  padding: 5px 4px;
+}
+.form-field .rel-option {
+  display: flex; align-items: center; gap: 6px; font-weight: 400; font-size: var(--fs-sm);
+  color: var(--text); margin: 0; padding: 3px 6px; border-radius: 3px; cursor: pointer;
+  white-space: nowrap;
+}
+.form-field .rel-option:hover { background: var(--hover); }
+.form-field .rel-option:has(input:checked) { background: rgba(55,148,255,0.10); }
+.form-field .rel-option .mono {
+  font-family: var(--mono); font-size: var(--fs-sm); color: var(--dim);
+}
+.form-field .rel-option.rel-hidden { display: none; }
+
+/* file previews + existing-asset items (reuse the 72px asset-strip frame) */
+.form-field .asset-item-list { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0; }
+.form-field .asset-item { display: flex; flex-direction: column; gap: 3px; width: 88px; }
+.form-field .asset-current { display: flex; flex-direction: column; gap: 3px; margin: 6px 0; width: 88px; }
+.form-field .asset-item .frame,
+.form-field .asset-current .frame {
+  width: 80px; height: 80px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+  background: #111 repeating-linear-gradient(45deg, #1a1a1a 0 8px, #161616 8px 16px);
+  display: flex; align-items: center; justify-content: center;
+}
+.form-field .asset-item .frame img,
+.form-field .asset-current .frame img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.form-field .apath { font-size: 10px; color: var(--dim); word-break: break-all; }
+.form-field .dest { color: #ce9178; }
+
+.form-actions { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
+.form-banner { padding: 8px 12px; border-radius: 4px; margin-bottom: 16px; font-size: var(--fs); }
+.form-banner-err { background: rgba(244,135,113,0.12); border: 1px solid var(--missing); color: var(--missing); }
 `;
 
 /** Render the shared studio chrome (activity bar + type sidebar + content). */
@@ -390,10 +545,14 @@ export function renderLayout(
       const ntChip = isTypeTranslatable(type.config)
         ? ""
         : ` <span class="chip nt" title="No translatable fields and no body">not translatable</span>`;
-      return `<a class="tree-item${active}" href="/types/${encodePathSegment(type.id)}">
-        <span class="tree-label">${escapeHtml(type.config.label)}${badge}${ntChip}</span>
-        <span class="tree-meta">${escapeHtml(type.id)}</span>
-      </a>`;
+      const label = escapeHtml(type.config.label);
+      return `<div class="tree-row">
+        <a class="tree-item${active}" href="/types/${encodePathSegment(type.id)}">
+          <span class="tree-label">${label}${badge}${ntChip}</span>
+          <span class="tree-meta">${escapeHtml(type.id)}</span>
+        </a>
+        <a class="tree-new" href="/types/${encodePathSegment(type.id)}/new" title="New ${label}" aria-label="New ${label}">+</a>
+      </div>`;
     })
     .join("");
 
@@ -413,9 +572,8 @@ export function renderLayout(
 <body>
   <div class="app">
     <nav class="actbar">
-      <a href="/" title="Overview">⌂</a>
-      <a href="/dashboard" title="Dashboard"${options.activeNav === "dashboard" ? ' class="active"' : ""}>▦</a>
-      <a href="/staleness" title="Staleness">⚠</a>
+      <a href="/" title="Content"${options.activeNav === "content" ? ' class="active"' : ""}>⌂</a>
+      <a href="/translations" title="Translations"${options.activeNav === "translations" ? ' class="active"' : ""}>⇄</a>
       ${assetsNav}
     </nav>
     <aside class="sidebar">

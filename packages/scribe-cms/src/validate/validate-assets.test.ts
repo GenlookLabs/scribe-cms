@@ -114,3 +114,64 @@ describe("validateDeclaredAssetFields", () => {
     assert.deepEqual(issues, []);
   });
 });
+
+describe("validateDeclaredAssetFields — multiple fields", () => {
+  const multiSchema = z.object({
+    images: field.asset({ dir: "/g", formats: ["webp"], maxKB: 1, multiple: true, min: 1, max: 2 }),
+  });
+  const runMulti = (frontmatter: Record<string, unknown>) =>
+    validateDeclaredAssetFields(config, {
+      contentType: "garment",
+      enSlug: "denim",
+      frontmatter,
+      schema: multiSchema,
+    });
+
+  it("passes when every element exists within dir/formats/size and count is in range", () => {
+    assert.deepEqual(runMulti({ images: ["/g/denim.webp"] }), []);
+  });
+
+  it("required-but-empty error for an empty array", () => {
+    const err = runMulti({ images: [] }).find((i) => i.field === "images");
+    assert.equal(err?.level, "error");
+    assert.match(err!.message, /images is required but empty/);
+  });
+
+  it("required-but-empty error when the field is absent", () => {
+    const err = runMulti({}).find((i) => i.field === "images");
+    assert.equal(err?.level, "error");
+    assert.match(err!.message, /images is required but empty/);
+  });
+
+  it("count over max is an error", () => {
+    const err = runMulti({ images: ["/g/denim.webp", "/g/denim.webp", "/g/denim.webp"] }).find(
+      (i) => i.message.includes("more than the maximum"),
+    );
+    assert.equal(err?.level, "error");
+    assert.match(err!.message, /has 3 item\(s\), more than the maximum 2/);
+  });
+
+  it("per-element missing file is reported with an indexed field path", () => {
+    const issues = runMulti({ images: ["/g/denim.webp", "/g/nope.webp"] });
+    const err = issues.find((i) => i.field === "images.1");
+    assert.equal(err?.level, "error");
+    assert.match(err!.message, /images\.1 → \/g\/nope\.webp not found/);
+  });
+
+  it("per-element format and size violations are warnings", () => {
+    const issues = runMulti({ images: ["/g/wrong.png", "/g/heavy.webp"] });
+    assert.equal(issues.find((i) => i.field === "images.0" && i.level === "warning")?.message.includes("not in formats"), true);
+    assert.equal(issues.find((i) => i.field === "images.1" && i.level === "warning")?.message.includes("budget"), true);
+  });
+
+  it("optional multiple absent produces no issue", () => {
+    const optSchema = z.object({ images: field.asset({ dir: "/g", multiple: true, optional: true }) });
+    const issues = validateDeclaredAssetFields(config, {
+      contentType: "garment",
+      enSlug: "denim",
+      frontmatter: {},
+      schema: optSchema,
+    });
+    assert.deepEqual(issues, []);
+  });
+});

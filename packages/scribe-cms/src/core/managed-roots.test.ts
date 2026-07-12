@@ -42,4 +42,19 @@ describe("getManagedRoots", () => {
     });
     assert.deepEqual(getManagedRoots(config), ["/blog-images", "/g", "/try-on/garments"]);
   });
+
+  it("a multiple field's dir participates like a single field's", () => {
+    const config = resolveConfig({
+      rootDir: "/proj",
+      locales: ["en"],
+      assets: {},
+      types: [
+        {
+          id: "album",
+          schema: z.object({ images: field.asset({ dir: "/gallery", multiple: true }) }),
+        },
+      ],
+    });
+    assert.deepEqual(getManagedRoots(config), ["/gallery"]);
+  });
 });

@@ -215,6 +215,35 @@ test("shared asset kept when referenced outside the set, deleted when only insid
   assert.ok(sharedAll.every((x) => x.action === "delete"));
 });
 
+test("multiple asset field: every element is planned for deletion", () => {
+  const { project } = build(
+    [{ id: "album", schema: z.object({ images: field.asset({ dir: "/img", multiple: true }) }) }],
+    { album: [{ slug: "a1", data: { images: ["/img/x.webp", "/img/y.webp", "/img/z.webp"] } }] },
+    { assets: true },
+  );
+  const plan = buildDeletionPlan(project, "album", "a1");
+  const paths = plan.assets.filter((a) => a.action === "delete").map((a) => a.path).sort();
+  assert.deepEqual(paths, ["/img/x.webp", "/img/y.webp", "/img/z.webp"]);
+});
+
+test("multiple asset field: a shared element is kept when referenced by a surviving doc", () => {
+  const { project } = build(
+    [{ id: "album", schema: z.object({ images: field.asset({ dir: "/img", multiple: true }) }) }],
+    {
+      album: [
+        { slug: "a1", data: { images: ["/img/solo.webp", "/img/shared.webp"] } },
+        { slug: "a2", data: { images: ["/img/shared.webp"] } },
+      ],
+    },
+    { assets: true },
+  );
+  const plan = buildDeletionPlan(project, "album", "a1");
+  assert.equal(plan.assets.find((a) => a.path === "/img/solo.webp")?.action, "delete");
+  const shared = plan.assets.find((a) => a.path === "/img/shared.webp");
+  assert.equal(shared?.action, "keep");
+  assert.equal(shared?.reason, "shared");
+});
+
 test("templated asset is deleted with its document", () => {
   const { project } = build(
     [{ id: "thing", schema: z.object({ pic: field.asset({ template: "/t/{slug}.webp" }) }) }],

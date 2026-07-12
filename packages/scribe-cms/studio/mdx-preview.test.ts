@@ -109,7 +109,7 @@ describe("renderMdxApprox", () => {
     const html = preview("[label](${{relation:glossary:foo:href}})");
     assert.match(
       html,
-      /<a class="mdx-relation-link" href="\/type\/glossary\/doc\/foo">label<\/a>/,
+      /<a class="mdx-relation-link" href="\/types\/glossary\/foo">label<\/a>/,
     );
   });
 
@@ -117,7 +117,7 @@ describe("renderMdxApprox", () => {
     const html = preview("See ${{relation:glossary:foo:href}}.");
     assert.match(
       html,
-      /<a class="mdx-relation-chip" href="\/type\/glossary\/doc\/foo">foo<\/a>/,
+      /<a class="mdx-relation-chip" href="\/types\/glossary\/foo">foo<\/a>/,
     );
   });
 
@@ -154,7 +154,7 @@ describe("renderMdxApprox", () => {
     assert.match(html, /&lt;E slug=&quot;/);
     assert.match(
       html,
-      /<a class="mdx-relation-link" href="\/type\/glossary\/doc\/foo">\$\{\{relation:glossary:foo:slug\}\}<\/a>/,
+      /<a class="mdx-relation-link" href="\/types\/glossary\/foo">\$\{\{relation:glossary:foo:slug\}\}<\/a>/,
     );
   });
 

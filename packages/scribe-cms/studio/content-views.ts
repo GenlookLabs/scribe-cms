@@ -124,6 +124,44 @@ export function typeBadges(buckets: ValidationBuckets): Map<string, string> {
 }
 
 // ---------------------------------------------------------------------------
+// Content home
+// ---------------------------------------------------------------------------
+
+/**
+ * The studio landing page: a dense grid of content-type cards. Each card shows
+ * the type label, its aggregate validation badge, its EN entry count, and a
+ * per-card "+ New" link; the card body links to the type's collection browser.
+ * This is the content-first entry point — translation coverage lives under its
+ * own `/translations` section.
+ */
+export function renderContentHome(project: ScribeProject, buckets: ValidationBuckets): string {
+  const types = project.listTypes();
+  const cards = types
+    .map((type) => {
+      const count = type.list().length;
+      const badge = validationBadge(buckets.byType.get(type.id));
+      const nt = isTypeTranslatable(type.config) ? "" : ` ${notTranslatableChip()}`;
+      const href = `/types/${encodePathSegment(type.id)}`;
+      const newHref = `/types/${encodePathSegment(type.id)}/new`;
+      return `<div class="home-card">
+        <a class="home-card-main" href="${href}">
+          <span class="home-card-label">${escapeHtml(type.config.label)}${badge}</span>
+          <span class="home-card-meta">${escapeHtml(type.id)} · ${count} ${count === 1 ? "entry" : "entries"}${nt}</span>
+        </a>
+        <a class="home-card-new" href="${newHref}" title="New ${escapeHtml(type.config.label)}">+ New</a>
+      </div>`;
+    })
+    .join("");
+  const toolbar = `<div class="toolbar">Content <span class="dim">· ${types.length} ${
+    types.length === 1 ? "type" : "types"
+  }</span></div>`;
+  const body = types.length
+    ? `<div class="home-grid">${cards}</div>`
+    : `<p class="dim" style="padding:12px">No content types.</p>`;
+  return `${toolbar}${body}`;
+}
+
+// ---------------------------------------------------------------------------
 // Value rendering
 // ---------------------------------------------------------------------------
 
@@ -269,6 +307,8 @@ function renderFilterBar(
   const controls = filterFields
     .map((f) => {
       const current = active[f.key] ?? "";
+      // `.describe()` help text becomes the label's tooltip.
+      const titleAttr = f.description ? ` title="${escapeHtml(f.description)}"` : "";
       if (f.kind === "enum") {
         const opts = ["", ...(f.enumOptions ?? [])]
           .map(
@@ -276,7 +316,7 @@ function renderFilterBar(
               `<option value="${escapeHtml(o)}"${o === current ? " selected" : ""}>${o === "" ? "any" : escapeHtml(o)}</option>`,
           )
           .join("");
-        return `<label>${escapeHtml(f.key)} <select name="${escapeHtml(f.key)}">${opts}</select></label>`;
+        return `<label${titleAttr}>${escapeHtml(f.key)} <select name="${escapeHtml(f.key)}">${opts}</select></label>`;
       }
       if (f.kind === "relation" && f.relationTarget) {
         const targetRuntime = safeGetType(project, f.relationTarget);
@@ -287,7 +327,7 @@ function renderFilterBar(
               `<option value="${escapeHtml(o)}"${o === current ? " selected" : ""}>${o === "" ? "any" : escapeHtml(o)}</option>`,
           )
           .join("");
-        return `<label>${escapeHtml(f.key)} <select name="${escapeHtml(f.key)}">${opts}</select></label>`;
+        return `<label${titleAttr}>${escapeHtml(f.key)} <select name="${escapeHtml(f.key)}">${opts}</select></label>`;
       }
       if (f.kind === "boolean") {
         const opts = [
@@ -300,10 +340,10 @@ function renderFilterBar(
               `<option value="${val}"${val === current ? " selected" : ""}>${label}</option>`,
           )
           .join("");
-        return `<label>${escapeHtml(f.key)} <select name="${escapeHtml(f.key)}">${opts}</select></label>`;
+        return `<label${titleAttr}>${escapeHtml(f.key)} <select name="${escapeHtml(f.key)}">${opts}</select></label>`;
       }
       // string
-      return `<label>${escapeHtml(f.key)} <input type="text" name="${escapeHtml(f.key)}" value="${escapeHtml(current)}" placeholder="contains…" /></label>`;
+      return `<label${titleAttr}>${escapeHtml(f.key)} <input type="text" name="${escapeHtml(f.key)}" value="${escapeHtml(current)}" placeholder="contains…" /></label>`;
     })
     .join("");
 
@@ -365,9 +405,12 @@ export function renderCollectionBrowser(
   const filterBar = renderFilterBar(project, type.id, filterFields, active, view, hasGallery);
 
   const ntMarker = isTypeTranslatable(type.config) ? "" : ` ${notTranslatableChip()}`;
+  const newHref = `/types/${encodePathSegment(type.id)}/new`;
   const toolbar = `<div class="toolbar">
-      <a href="/">Overview</a><span class="sep">›</span>${escapeHtml(type.config.label)}${ntMarker}
+      <a href="/">Content</a><span class="sep">›</span>${escapeHtml(type.config.label)}${ntMarker}
       <span class="dim"> · ${docs.length}${docs.length !== allDocs.length ? ` / ${allDocs.length}` : ""} entries</span>
+      <span class="spacer"></span>
+      <a class="btn-accent" href="${newHref}">+ New entry</a>
     </div>`;
 
   const body =
@@ -419,7 +462,7 @@ function renderGallery(
   ctx: CollectionContext,
   docs: ScribeDocument[],
   keyFields: StudioFieldMeta[],
-  primaryAsset: { path: string[]; assetTemplate?: string },
+  primaryAsset: { path: string[]; assetTemplate?: string; assetMultiple?: boolean },
   entryBucket: Map<string, ValidateIssue[]> | undefined,
 ): string {
   const { project, config, type } = ctx;
@@ -428,13 +471,16 @@ function renderGallery(
       const frontmatter = doc.frontmatter as Record<string, unknown>;
       const href = `/types/${encodePathSegment(type.id)}/${encodePathSegment(doc.enSlug)}`;
       const webPath = sourceAssetValue(frontmatter, primaryAsset, doc.enSlug);
+      // "+N" badge when a multiple field holds more images than the one shown.
+      const extra = extraAssetCount(frontmatter, primaryAsset);
+      const plusN = extra > 0 ? `<span class="plusn">+${extra}</span>` : "";
       let thumb = `<div class="thumb"><span class="noimg">no image</span></div>`;
       if (webPath) {
         const resolved = resolveAssetWebPath(config, webPath);
         if (resolved && statAsset(resolved.absPath, webPath).exists) {
-          thumb = `<div class="thumb"><img loading="lazy" src="${assetPreviewUrl(webPath)}" alt="${escapeHtml(doc.slug)}" /></div>`;
+          thumb = `<div class="thumb"><img loading="lazy" src="${assetPreviewUrl(webPath)}" alt="${escapeHtml(doc.slug)}" />${plusN}</div>`;
         } else {
-          thumb = `<div class="thumb"><span class="noimg">missing file</span></div>`;
+          thumb = `<div class="thumb"><span class="noimg">missing file</span>${plusN}</div>`;
         }
       }
       const keyLine = keyFields
@@ -458,17 +504,34 @@ function renderGallery(
 /** SOURCE (unresolved) asset value for a field on an entry, materializing templates. */
 function sourceAssetValue(
   frontmatter: Record<string, unknown>,
-  field: { path: string[]; assetTemplate?: string },
+  field: { path: string[]; assetTemplate?: string; assetMultiple?: boolean },
   enSlug: string,
 ): string | undefined {
   // Only handle top-level (non-`*`) asset fields for the primary thumbnail.
   if (field.path.includes("*")) return undefined;
   const value = valueAtPath(frontmatter, field.path);
+  // A multiple field's card image is its first element.
+  if (Array.isArray(value)) {
+    const first = value.find((v) => typeof v === "string" && v);
+    return typeof first === "string" ? first : undefined;
+  }
   if (typeof value === "string" && value) return value;
   if (value === undefined && field.assetTemplate) {
     return field.assetTemplate.split("{slug}").join(enSlug);
   }
   return undefined;
+}
+
+/** Count of asset elements beyond the first (for the gallery "+N" badge). */
+function extraAssetCount(
+  frontmatter: Record<string, unknown>,
+  field: { path: string[]; assetMultiple?: boolean },
+): number {
+  if (!field.assetMultiple || field.path.includes("*")) return 0;
+  const value = valueAtPath(frontmatter, field.path);
+  if (!Array.isArray(value)) return 0;
+  const n = value.filter((v) => typeof v === "string" && v).length;
+  return n > 1 ? n - 1 : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -490,6 +553,12 @@ export interface InspectorContext {
   buckets: ValidationBuckets;
   /** Locale tabs HTML from the server (reusing existing status dots). */
   localeTabs: string;
+  /** View-switcher tabs (Details / Translations); empty for non-translatable types. */
+  viewTabs?: string;
+  /** Which view to render: the default inspector, or the per-locale translation detail. */
+  view?: "details" | "translations";
+  /** Prebuilt translation-detail panel (translation-views.ts) when `view === "translations"`. */
+  translationDetail?: string;
   /** Which body tab to show: raw MDX source (default) or the rendered approximation. */
   bodyView?: "raw" | "preview";
   /** Previous entry in the collection's default order (null at the start). */
@@ -498,6 +567,8 @@ export interface InspectorContext {
   next?: { href: string; slug: string } | null;
   /** URL of the delete confirmation page for this entry. */
   deleteHref: string;
+  /** URL of the edit form for this entry. */
+  editHref: string;
 }
 
 export function renderEntryInspector(ctx: InspectorContext): string {
@@ -543,6 +614,7 @@ export function renderEntryInspector(ctx: InspectorContext): string {
   const nextBtn = next
     ? `<a class="navbtn" id="nav-next" href="${next.href}" title="Next: ${escapeHtml(next.slug)}">›</a>`
     : `<span class="navbtn disabled" title="No next entry">›</span>`;
+  const editBtn = `<a class="btn-accent" href="${ctx.editHref}">Edit</a>`;
   const deleteBtn = `<a class="btn-danger" href="${ctx.deleteHref}">Delete</a>`;
 
   // The studio's only client-side JS: bind Left/Right arrows to prev/next,
@@ -554,24 +626,33 @@ export function renderEntryInspector(ctx: InspectorContext): string {
   )};document.addEventListener("keydown",function(e){var a=document.activeElement;if(a){var t=a.tagName;if(t==="INPUT"||t==="TEXTAREA"||t==="SELECT"||a.isContentEditable)return;}if(e.key==="ArrowLeft"&&p){window.location.href=p;}else if(e.key==="ArrowRight"&&n){window.location.href=n;}});})();</script>`;
 
   const toolbar = `<div class="toolbar">
-      <a href="/">Overview</a><span class="sep">›</span>
+      <a href="/">Content</a><span class="sep">›</span>
       <a href="/types/${encodePathSegment(type.id)}">${escapeHtml(type.config.label)}</a><span class="sep">›</span>
       <span>${escapeHtml(enSlug)}</span>
       <span class="spacer"></span>
       ${viewOnSite}
       <span class="navgroup">${prevBtn}${nextBtn}</span>
+      ${editBtn}
       ${deleteBtn}
     </div>`;
 
-  return `${toolbar}${navScript}
-    <div class="tabs">${ctx.localeTabs}</div>
-    ${issuesPanel}
+  // The "Translations" tab swaps the default Details content (issues, fields,
+  // used-by, body) for the per-locale translation detail built by the server.
+  const mainContent =
+    ctx.view === "translations" && ctx.translationDetail !== undefined
+      ? ctx.translationDetail
+      : `${issuesPanel}
     <div class="section">
       <div class="section-head">Fields</div>
       <div class="section-body"><table class="kv"><tbody>${fieldRows}</tbody></table></div>
     </div>
     ${usedByPanel}
     ${bodyPanel}`;
+
+  return `${toolbar}${navScript}
+    ${ctx.viewTabs ?? ""}
+    <div class="tabs">${ctx.localeTabs}</div>
+    ${mainContent}`;
 }
 
 /** Body section with Raw / Preview tabs. Raw is the default (query param `body=preview`). */
@@ -655,8 +736,11 @@ function renderFieldRow(
     cell = shown;
   }
 
+  const desc = field.description
+    ? `<div class="field-desc">${escapeHtml(field.description)}</div>`
+    : "";
   return `<tr>
-    <td class="k">${fieldFlag(field.kind)}${escapeHtml(key)}</td>
+    <td class="k">${fieldFlag(field.kind)}${escapeHtml(key)}${desc}</td>
     <td class="v">${cell}</td>
   </tr>`;
 }
@@ -667,6 +751,19 @@ function renderAssetCell(
   rawValue: unknown,
   enSlug: string,
 ): string {
+  // Multiple asset field: render a horizontal strip of compact thumbnails.
+  if (field.assetMultiple) {
+    const paths = Array.isArray(rawValue)
+      ? rawValue.filter((v): v is string => typeof v === "string" && v.length > 0)
+      : [];
+    if (paths.length === 0) {
+      if (field.assetOptional) return `<span class="dim">—</span>`;
+      return `<span class="vbadge err">missing value</span>`;
+    }
+    const thumbs = paths.map((wp) => renderAssetThumb(config, wp)).join("");
+    return `<div class="asset-strip">${thumbs}</div>`;
+  }
+
   let webPath: string | undefined;
   if (typeof rawValue === "string" && rawValue) webPath = rawValue;
   else if (rawValue === undefined && field.assetTemplate) {
@@ -714,6 +811,16 @@ function renderAssetCell(
       ${badges}
     </div>
   </div>`;
+}
+
+/** A single compact thumbnail for the multiple-asset strip. */
+function renderAssetThumb(config: ScribeConfig, webPath: string): string {
+  const resolved = resolveAssetWebPath(config, webPath);
+  const info = resolved ? statAsset(resolved.absPath, webPath) : null;
+  if (!resolved || !info?.exists) {
+    return `<div class="frame" title="${escapeHtml(webPath)} (file not found)"><span class="noimg">missing</span></div>`;
+  }
+  return `<div class="frame" title="${escapeHtml(webPath)}"><img loading="lazy" src="${assetPreviewUrl(webPath)}" alt="asset" /></div>`;
 }
 
 function renderIssuesPanel(issues: ValidateIssue[]): string {
@@ -796,7 +903,7 @@ export function renderDeletionPlanPage(
   const blocked = plan.blocked.length > 0;
 
   const toolbar = `<div class="toolbar">
-      <a href="/">Overview</a><span class="sep">›</span>
+      <a href="/">Content</a><span class="sep">›</span>
       <a href="/types/${encodePathSegment(options.typeId)}">${escapeHtml(
         safeGetType(project, options.typeId)?.config.label ?? options.typeId,
       )}</a><span class="sep">›</span>

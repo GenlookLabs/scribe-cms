@@ -126,15 +126,46 @@ const schema = z.object({
 | Option | Description |
 | --- | --- |
 | `dir` | Web-path prefix the value must live under. Also declares a managed root. |
-| `template` | Derived-path template, e.g. `"/try-on/garments/{slug}/product.webp"` (`{slug}` is the EN slug). When set, the field may be omitted (the loader fills it); an explicit value overrides it. |
+| `template` | Derived-path template, e.g. `"/try-on/garments/{slug}/product.webp"` (`{slug}` is the EN slug). When set, the field may be omitted (the loader fills it); an explicit value overrides it. Cannot be combined with `multiple`. |
 | `formats` | Allowed extensions (lowercase, no dot). Violation is a warning. |
 | `maxKB` | File-size budget. Violation is a warning. |
 | `optional` | The field may be absent (only meaningful without `template`). A present value whose file is missing is still an error. |
+| `multiple` | The field holds an **array** of web paths instead of one. Each element is validated (existence, `dir`, `formats`, `maxKB`) and prefixed with `publicPath`. |
+| `min` / `max` | Array length bounds (`multiple: true` only). Out-of-range counts are errors. |
 | `onDelete` | `"delete"` (default) removes the file when its document is deleted; `"keep"` leaves it. A shared (non-templated) path is only removed when no document outside the deletion set still references it. See [Entry deletion](./deletion.md). |
 
-Constraints go in the options object, not chained Zod methods. Requires the
-`assets` config group to be enabled. See [Asset management](./assets.md) for the
-full design.
+```ts
+// A field holding several images:
+const schema = z.object({
+  gallery: field.asset({ dir: "/products", formats: ["webp"], multiple: true, min: 1, max: 6 }),
+});
+// gallery in frontmatter is an array of web paths; the runtime resolves each element.
+```
+
+`multiple: true` is the API for many-assets — **not** `z.array(field.asset())`,
+which mis-detects (introspection unwraps arrays and would read the inner
+single-asset brand). Constraints go in the options object, not chained Zod
+methods. Requires the `assets` config group to be enabled. See
+[Asset management](./assets.md) for the full design.
+
+### Field descriptions
+
+Any field may carry help text with Zod's native `.describe()` — including the
+schemas returned by `field.asset()`, `field.relation()`, `field.translatable()`,
+and `field.structural()`. The text surfaces in the studio inspector (muted line
+under the field key) and as the tooltip on the collection filter labels.
+
+```ts
+const schema = z.object({
+  status: field.structural(z.enum(["draft", "live"])).describe("Publication state"),
+  gallery: field.asset({ dir: "/products", multiple: true }).describe("Up to 6 product shots"),
+});
+```
+
+The description may sit on the inner schema or on an outer `.optional()` wrapper;
+Scribe checks both (outer wins). `.describe()` returns a schema clone, but Scribe
+brands both the schema and its shared `_def`, so a description never disturbs
+relation/asset detection.
 
 ## Locale fallback chains
 

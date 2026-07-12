@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { z } from "zod";
-import { field, getAssetMeta, getFieldKind, getRelationTarget } from "./field.js";
+import {
+  field,
+  getAssetMeta,
+  getFieldDescription,
+  getFieldKind,
+  getRelationTarget,
+} from "./field.js";
 import { introspectSchema, listAssetFields, listRelationFields } from "./introspect-schema.js";
 
 describe("field.relation metadata durability", () => {
@@ -100,6 +106,7 @@ describe("field.asset metadata durability", () => {
       maxKB: undefined,
       optional: false,
       onDelete: "delete",
+      multiple: false,
     });
   });
 
@@ -114,6 +121,7 @@ describe("field.asset metadata durability", () => {
       maxKB: 150,
       optional: false,
       onDelete: "delete",
+      multiple: false,
     });
   });
 
@@ -172,5 +180,115 @@ describe("introspectSchema asset discovery", () => {
     });
     assert.equal(byPath.get("gallery.*.src")?.assetTemplate, "/g/{slug}.webp");
     assert.equal(byPath.get("nested.hero")?.assetOptional, true);
+  });
+});
+
+describe("field descriptions via Zod .describe()", () => {
+  it("reads a description on a bare schema", () => {
+    assert.equal(getFieldDescription(z.string().describe("a title")), "a title");
+  });
+
+  it("reads a description on the inner schema through the optional wrapper", () => {
+    // describe() sits on the inner string; optional() wraps it afterwards.
+    const schema = z.string().describe("inner help").optional();
+    assert.equal(getFieldDescription(schema), "inner help");
+  });
+
+  it("reads a description on the outer optional wrapper", () => {
+    const schema = z.string().optional().describe("outer help");
+    assert.equal(getFieldDescription(schema), "outer help");
+  });
+
+  it("outer wins when both wrapper levels carry a description", () => {
+    const schema = z.string().describe("inner").optional().describe("outer");
+    assert.equal(getFieldDescription(schema), "outer");
+  });
+
+  it("returns undefined when no description is set", () => {
+    assert.equal(getFieldDescription(z.string()), undefined);
+    assert.equal(getFieldDescription(z.string().optional()), undefined);
+  });
+
+  it(".describe() does NOT break relation/asset/kind brand detection (clone keeps _def brand)", () => {
+    // .describe() returns a clone that drops instance symbols but shares _def,
+    // where the brand is also stored — so detection must still succeed.
+    const rel = field.relation("author").describe("who wrote it");
+    assert.equal(getRelationTarget(rel)?.typeId, "author");
+    assert.equal(getFieldDescription(rel), "who wrote it");
+
+    const relMulti = field.relation("glossary", { multiple: true }).describe("terms");
+    assert.equal(getRelationTarget(relMulti)?.multiple, true);
+
+    const asset = field.asset({ dir: "/g" }).describe("the hero image");
+    assert.equal(getAssetMeta(asset)?.dir, "/g");
+    assert.equal(getFieldDescription(asset), "the hero image");
+
+    const assetMulti = field.asset({ dir: "/g", multiple: true }).describe("images");
+    assert.equal(getAssetMeta(assetMulti)?.multiple, true);
+
+    assert.equal(getFieldKind(field.translatable(z.string()).describe("x")), "translatable");
+  });
+
+  it("introspectSchema surfaces description on leaf field metas", () => {
+    const schema = z.object({
+      title: field.translatable(z.string()).describe("shown as the H1"),
+      hero: field.asset({ dir: "/g" }).describe("card image"),
+      plain: z.string(),
+    });
+    const byPath = new Map(introspectSchema(schema).map((f) => [f.path.join("."), f]));
+    assert.equal(byPath.get("title")?.description, "shown as the H1");
+    assert.equal(byPath.get("hero")?.description, "card image");
+    // No description key at all when none was set (keeps deepEqual shapes stable).
+    assert.equal("description" in (byPath.get("plain") as object), false);
+  });
+});
+
+describe("field.asset multiple", () => {
+  it("carries multiple/min/max metadata and parses an array of paths", () => {
+    const schema = field.asset({ dir: "/g", multiple: true, min: 1, max: 3 });
+    assert.deepEqual(getAssetMeta(schema), {
+      dir: "/g",
+      template: undefined,
+      formats: undefined,
+      maxKB: undefined,
+      optional: false,
+      onDelete: "delete",
+      multiple: true,
+      min: 1,
+      max: 3,
+    });
+    assert.equal(schema.safeParse(["/g/a.webp"]).success, true);
+    assert.equal(schema.safeParse(["/g/a.webp", "/g/b.webp", "/g/c.webp"]).success, true);
+    assert.equal(schema.safeParse([]).success, false); // below min
+    assert.equal(schema.safeParse(["/a", "/b", "/c", "/d"]).success, false); // above max
+    assert.equal(schema.safeParse("/g/a.webp").success, false); // not an array
+  });
+
+  it("optional multiple parses undefined", () => {
+    const schema = field.asset({ multiple: true, optional: true });
+    assert.equal(schema.safeParse(undefined).success, true);
+    assert.equal(schema.safeParse(["/a.webp"]).success, true);
+  });
+
+  it("throws when combining template with multiple", () => {
+    assert.throws(
+      () => field.asset({ multiple: true, template: "/g/{slug}.webp" }),
+      /cannot be combined with a template/,
+    );
+  });
+
+  it("throws when min/max are used without multiple", () => {
+    assert.throws(() => field.asset({ min: 1 }), /min\/max require \{ multiple: true \}/);
+  });
+
+  it("introspectSchema emits assetMultiple only for multiple fields", () => {
+    const schema = z.object({
+      single: field.asset({ dir: "/g" }),
+      images: field.asset({ dir: "/g", multiple: true, min: 2 }),
+    });
+    const byPath = new Map(listAssetFields(schema).map((a) => [a.path.join("."), a]));
+    assert.equal(byPath.get("single")?.assetMultiple, undefined);
+    assert.equal(byPath.get("images")?.assetMultiple, true);
+    assert.equal(byPath.get("images")?.assetMin, 2);
   });
 });

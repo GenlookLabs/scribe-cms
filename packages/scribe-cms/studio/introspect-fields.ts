@@ -7,6 +7,7 @@ import {
   type SchemaFieldMeta,
 } from "../src/core/introspect-schema.js";
 import { collectImagePaths } from "../src/validate/validate-assets.js";
+import { walkAssetValues } from "../src/core/walk-asset-values.js";
 import { extractInlineTokens } from "../src/inline/tokens.js";
 import type { ContentTypeRuntime, ScribeDocument } from "../src/core/types.js";
 
@@ -95,6 +96,8 @@ export interface FilterFieldMeta {
   enumOptions?: string[];
   /** Relation target type id for `kind === "relation"`. */
   relationTarget?: string;
+  /** Field's `.describe()` help text, surfaced as the filter label's `title`. */
+  description?: string;
 }
 
 /**
@@ -107,14 +110,15 @@ export function filterFieldsFor(schema: z.ZodTypeAny): FilterFieldMeta[] {
   for (const field of introspectStudioFields(schema)) {
     if (field.path.length !== 1 || field.path.includes("*")) continue;
     const key = field.path[0]!;
+    const description = field.description;
     if (field.kind === "relation") {
-      out.push({ key, kind: "relation", relationTarget: field.relationTarget });
+      out.push({ key, kind: "relation", relationTarget: field.relationTarget, description });
     } else if (field.enumOptions) {
-      out.push({ key, kind: "enum", enumOptions: field.enumOptions });
+      out.push({ key, kind: "enum", enumOptions: field.enumOptions, description });
     } else if (field.isBoolean) {
-      out.push({ key, kind: "boolean" });
+      out.push({ key, kind: "boolean", description });
     } else if (field.kind !== "asset" && field.isScalar) {
-      out.push({ key, kind: "string" });
+      out.push({ key, kind: "string", description });
     }
   }
   return out;
@@ -282,29 +286,17 @@ function collectDeclaredValues(
   field: SchemaFieldMeta,
 ): Array<{ value: string; fieldPath: string }> {
   const out: Array<{ value: string; fieldPath: string }> = [];
-  const walk = (container: unknown, path: string[], soFar: string[]): void => {
-    const [head, ...rest] = path;
-    if (head === undefined) return;
-    if (typeof container !== "object" || container === null || Array.isArray(container)) return;
-    const record = container as Record<string, unknown>;
-    if (rest.length === 0) {
-      const value = record[head];
-      const fieldPath = [...soFar, head].join(".");
-      if (typeof value === "string" && value) out.push({ value, fieldPath });
-      else if (value === undefined && field.assetTemplate) {
+  walkAssetValues(
+    frontmatter,
+    field.path,
+    ({ raw, fieldPath }) => {
+      if (typeof raw === "string" && raw) out.push({ value: raw, fieldPath });
+      else if (raw === undefined && field.assetTemplate) {
         out.push({ value: field.assetTemplate.split("{slug}").join(enSlug), fieldPath });
       }
-      return;
-    }
-    if (rest[0] === "*") {
-      const arr = record[head];
-      if (!Array.isArray(arr)) return;
-      arr.forEach((item) => walk(item, rest.slice(1), [...soFar, head, "*"]));
-      return;
-    }
-    walk(record[head], rest, [...soFar, head]);
-  };
-  walk(frontmatter, field.path, []);
+    },
+    { multiple: field.assetMultiple },
+  );
   return out;
 }
 

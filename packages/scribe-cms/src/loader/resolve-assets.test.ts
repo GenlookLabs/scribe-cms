@@ -94,6 +94,28 @@ describe("resolveDocumentAssets", () => {
     resolveDocumentAssets(doc, listAssetFields(optSchema), rootAssets);
     assert.equal((doc.frontmatter as Record<string, unknown>).maybe, undefined);
   });
+
+  it("prefixes every element of a multiple field in place", () => {
+    const multiSchema = z.object({ images: field.asset({ dir: "/g", multiple: true }) });
+    const doc = makeDoc({ images: ["/g/a.webp", "/g/b.webp"] });
+    resolveDocumentAssets(doc, listAssetFields(multiSchema), cdnAssets);
+    assert.deepEqual((doc.frontmatter as Record<string, unknown>).images, [
+      "https://cdn.example.com/g/a.webp",
+      "https://cdn.example.com/g/b.webp",
+    ]);
+  });
+
+  it("leaves an empty / absent multiple field untouched", () => {
+    const multiSchema = z.object({
+      images: field.asset({ dir: "/g", multiple: true }),
+      maybe: field.asset({ dir: "/g", multiple: true, optional: true }),
+    });
+    const doc = makeDoc({ images: [] });
+    resolveDocumentAssets(doc, listAssetFields(multiSchema), cdnAssets);
+    const fm = doc.frontmatter as Record<string, unknown>;
+    assert.deepEqual(fm.images, []);
+    assert.equal(fm.maybe, undefined);
+  });
 });
 
 describe("loader integration: resolveAssets flag", () => {

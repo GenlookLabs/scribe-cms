@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { z } from "zod";
 import { listAssetFields, type SchemaFieldMeta } from "../core/introspect-schema.js";
+import { walkAssetValues } from "../core/walk-asset-values.js";
 import type { ScribeConfig } from "../core/types.js";
 
 const IMAGE_EXT = String.raw`(?:png|jpe?g|webp|gif|svg)`;
@@ -108,41 +109,26 @@ export function validateDocumentAssets(
   return issues;
 }
 
-/** Collect each concrete asset-field location value from frontmatter (arrays at `*`). */
+/** Collect each concrete asset-field location value from frontmatter (arrays at `*`, elements when `multiple`). */
 function collectAssetValues(
   container: unknown,
   path: string[],
   out: Array<{ fieldPath: string; value: string | undefined }>,
-  fieldPathSoFar: string[] = [],
+  multiple = false,
 ): void {
-  const [head, ...rest] = path;
-  if (head === undefined) return;
-  if (typeof container !== "object" || container === null || Array.isArray(container)) return;
-  const record = container as Record<string, unknown>;
-
-  if (rest.length === 0) {
-    const value = record[head];
-    out.push({
-      fieldPath: [...fieldPathSoFar, head].join("."),
-      value: typeof value === "string" ? value : undefined,
-    });
-    return;
-  }
-
-  if (rest[0] === "*") {
-    const arr = record[head];
-    if (!Array.isArray(arr)) {
-      // No array present: report a single absent location for attribution.
-      out.push({ fieldPath: [...fieldPathSoFar, head, "*", ...rest.slice(1)].join("."), value: undefined });
-      return;
-    }
-    arr.forEach((item) => {
-      collectAssetValues(item, rest.slice(1), out, [...fieldPathSoFar, head, "*"]);
-    });
-    return;
-  }
-
-  collectAssetValues(record[head], rest, out, [...fieldPathSoFar, head]);
+  walkAssetValues(
+    container,
+    path,
+    ({ raw, fieldPath, index }) => {
+      // A multiple field's summary visit (index === null) carries the whole
+      // array — skip it so only the per-element string values are collected.
+      if (multiple && index === null) return;
+      // Absent `*` arrays surface here as a single location with `value:
+      // undefined`, matching the original single-absent-location attribution.
+      out.push({ fieldPath, value: typeof raw === "string" ? raw : undefined });
+    },
+    { reportAbsentArrays: true, multiple },
+  );
 }
 
 function normalizeDir(dir: string): string {
@@ -180,7 +166,92 @@ export function validateDeclaredAssetFields(
       message,
     });
 
+  // Per-location file checks: dir containment, existence, format, size.
+  const checkLocation = (f: SchemaFieldMeta, fieldPath: string, effective: string): void => {
+    if (f.assetDir) {
+      const dir = normalizeDir(f.assetDir);
+      if (!(effective === dir || effective.startsWith(`${dir}/`))) {
+        attrib(
+          fieldPath,
+          "error",
+          `${input.contentType}/${input.enSlug}: ${fieldPath} value ${effective} is outside declared dir ${dir}`,
+        );
+      }
+    }
+
+    const filePath = assetFilePath(assetsPath, effective);
+    if (!fs.existsSync(filePath)) {
+      attrib(fieldPath, "error", `${input.contentType}/${input.enSlug}: ${fieldPath} → ${effective} not found`);
+      return;
+    }
+
+    if (f.assetFormats && f.assetFormats.length > 0) {
+      const ext = path.extname(effective).slice(1).toLowerCase();
+      if (!f.assetFormats.includes(ext)) {
+        attrib(
+          fieldPath,
+          "warning",
+          `${input.contentType}/${input.enSlug}: ${fieldPath} → ${effective} extension .${ext} not in formats [${f.assetFormats.join(", ")}]`,
+        );
+      }
+    }
+
+    if (f.assetMaxKB !== undefined) {
+      try {
+        const sizeKB = fs.statSync(filePath).size / 1024;
+        if (sizeKB > f.assetMaxKB) {
+          attrib(
+            fieldPath,
+            "warning",
+            `${input.contentType}/${input.enSlug}: ${fieldPath} → ${effective} is ${Math.round(sizeKB)}KB, over the ${f.assetMaxKB}KB budget`,
+          );
+        }
+      } catch {
+        /* stat failure already implies a missing file, handled above */
+      }
+    }
+  };
+
   for (const f of listAssetFields(input.schema)) {
+    if (f.assetMultiple) {
+      // Gather per-element values and the array's item count (null when absent).
+      const elements: Array<{ fieldPath: string; value: string }> = [];
+      let count: number | null = null;
+      let fieldPath = f.path.join(".");
+      walkAssetValues(
+        input.frontmatter,
+        f.path,
+        (leaf) => {
+          if (leaf.index !== null) {
+            if (typeof leaf.raw === "string" && leaf.raw) {
+              elements.push({ fieldPath: leaf.fieldPath, value: leaf.raw });
+            }
+          } else {
+            count = leaf.count;
+            fieldPath = leaf.fieldPath;
+          }
+        },
+        { multiple: true, reportAbsentArrays: true },
+      );
+
+      // Empty or absent array = required-but-missing (unless optional).
+      if ((count === null || count === 0) && !f.assetOptional) {
+        attrib(fieldPath, "error", `${input.contentType}/${input.enSlug}: ${fieldPath} is required but empty`);
+      }
+      if (count !== null) {
+        if (f.assetMin !== undefined && count < f.assetMin) {
+          attrib(fieldPath, "error", `${input.contentType}/${input.enSlug}: ${fieldPath} has ${count} item(s), fewer than the minimum ${f.assetMin}`);
+        }
+        if (f.assetMax !== undefined && count > f.assetMax) {
+          attrib(fieldPath, "error", `${input.contentType}/${input.enSlug}: ${fieldPath} has ${count} item(s), more than the maximum ${f.assetMax}`);
+        }
+      }
+      for (const { fieldPath: efp, value } of elements) {
+        checkLocation(f, efp, value);
+      }
+      continue;
+    }
+
     const locations: Array<{ fieldPath: string; value: string | undefined }> = [];
     collectAssetValues(input.frontmatter, f.path, locations);
 
@@ -198,48 +269,7 @@ export function validateDeclaredAssetFields(
         continue;
       }
 
-      if (f.assetDir) {
-        const dir = normalizeDir(f.assetDir);
-        if (!(effective === dir || effective.startsWith(`${dir}/`))) {
-          attrib(
-            fieldPath,
-            "error",
-            `${input.contentType}/${input.enSlug}: ${fieldPath} value ${effective} is outside declared dir ${dir}`,
-          );
-        }
-      }
-
-      const filePath = assetFilePath(assetsPath, effective);
-      if (!fs.existsSync(filePath)) {
-        attrib(fieldPath, "error", `${input.contentType}/${input.enSlug}: ${fieldPath} → ${effective} not found`);
-        continue;
-      }
-
-      if (f.assetFormats && f.assetFormats.length > 0) {
-        const ext = path.extname(effective).slice(1).toLowerCase();
-        if (!f.assetFormats.includes(ext)) {
-          attrib(
-            fieldPath,
-            "warning",
-            `${input.contentType}/${input.enSlug}: ${fieldPath} → ${effective} extension .${ext} not in formats [${f.assetFormats.join(", ")}]`,
-          );
-        }
-      }
-
-      if (f.assetMaxKB !== undefined) {
-        try {
-          const sizeKB = fs.statSync(filePath).size / 1024;
-          if (sizeKB > f.assetMaxKB) {
-            attrib(
-              fieldPath,
-              "warning",
-              `${input.contentType}/${input.enSlug}: ${fieldPath} → ${effective} is ${Math.round(sizeKB)}KB, over the ${f.assetMaxKB}KB budget`,
-            );
-          }
-        } catch {
-          /* stat failure already implies a missing file, handled above */
-        }
-      }
+      checkLocation(f, fieldPath, effective);
     }
   }
 
@@ -256,10 +286,10 @@ export function collectDeclaredAssetPaths(
   const out = new Set<string>();
   for (const f of fields ?? listAssetFields(schema)) {
     const locations: Array<{ fieldPath: string; value: string | undefined }> = [];
-    collectAssetValues(frontmatter, f.path, locations);
+    collectAssetValues(frontmatter, f.path, locations, f.assetMultiple);
     for (const { value } of locations) {
       if (value !== undefined) out.add(value);
-      else if (f.assetTemplate) out.add(f.assetTemplate.split("{slug}").join(enSlug));
+      else if (!f.assetMultiple && f.assetTemplate) out.add(f.assetTemplate.split("{slug}").join(enSlug));
     }
   }
   return out;

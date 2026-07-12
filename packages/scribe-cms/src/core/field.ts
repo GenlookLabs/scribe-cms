@@ -37,6 +37,12 @@ export interface AssetMeta {
   optional: boolean;
   /** Whether the file is removed when its document is deleted. Default `"delete"`. */
   onDelete: AssetOnDelete;
+  /** Field holds an array of web paths (`{ multiple: true }`) instead of a single path. */
+  multiple: boolean;
+  /** Minimum item count (`multiple: true` only). */
+  min?: number;
+  /** Maximum item count (`multiple: true` only). */
+  max?: number;
 }
 
 /**
@@ -62,25 +68,47 @@ export type RelationField<
   TBrand extends RelationBrand,
 > = TZod & { [RELATION_BRAND]: TBrand };
 
+/**
+ * Attach a non-enumerable brand to a schema. We define it on BOTH the schema
+ * instance AND its `_def`, because `.describe()` (and `.meta()`) return a CLONE
+ * that shares the same `_def` object reference but drops instance-only symbol
+ * properties. Branding `_def` too is what lets `field.asset(...).describe("…")`
+ * survive brand detection even for a non-optional field (where the branded
+ * schema IS the leaf that `.describe()` clones). See `docs/assets.md`.
+ */
+function defineBrand(schema: Zod.ZodTypeAny, sym: symbol, value: unknown): void {
+  Object.defineProperty(schema, sym, { value, enumerable: false, configurable: true });
+  const def = (schema as { _def?: object })._def;
+  if (def && typeof def === "object") {
+    Object.defineProperty(def, sym, { value, enumerable: false, configurable: true });
+  }
+}
+
+/** Read a brand from a schema instance, falling back to its `_def` (see `defineBrand`). */
+function readBrand<V>(schema: Zod.ZodTypeAny, sym: symbol): V | undefined {
+  const anySchema = schema as unknown as { [k: symbol]: unknown; _def?: { [k: symbol]: unknown } };
+  const direct = anySchema[sym];
+  if (direct !== undefined) return direct as V;
+  const def = anySchema._def;
+  return def ? (def[sym] as V | undefined) : undefined;
+}
+
 /** Return whether a Zod field is translatable or structural. */
 export function getFieldKind(schema: Zod.ZodTypeAny): FieldKind {
-  const tagged = schema as Zod.ZodTypeAny & { [FIELD_KIND]?: FieldKind };
-  return tagged[FIELD_KIND] ?? "structural";
+  return readBrand<FieldKind>(schema, FIELD_KIND) ?? "structural";
 }
 
 /** Return relation metadata if the field was created with `field.relation()`. */
 export function getRelationTarget(schema: Zod.ZodTypeAny): RelationMeta | null {
   let current: Zod.ZodTypeAny = schema;
   for (let i = 0; i < 8; i++) {
+    const meta = readBrand<RelationMeta>(current, RELATION_META);
+    if (meta) return meta;
     const tagged = current as Zod.ZodTypeAny & {
-      [RELATION_META]?: RelationMeta;
       unwrap?: () => Zod.ZodTypeAny;
       removeDefault?: () => Zod.ZodTypeAny;
       _def?: { innerType?: Zod.ZodTypeAny };
     };
-    if (tagged[RELATION_META]) {
-      return tagged[RELATION_META];
-    }
     if (typeof tagged.unwrap === "function") {
       current = tagged.unwrap();
       continue;
@@ -102,15 +130,13 @@ export function getRelationTarget(schema: Zod.ZodTypeAny): RelationMeta | null {
 export function getAssetMeta(schema: Zod.ZodTypeAny): AssetMeta | null {
   let current: Zod.ZodTypeAny = schema;
   for (let i = 0; i < 8; i++) {
+    const meta = readBrand<AssetMeta>(current, ASSET_META);
+    if (meta) return meta;
     const tagged = current as Zod.ZodTypeAny & {
-      [ASSET_META]?: AssetMeta;
       unwrap?: () => Zod.ZodTypeAny;
       removeDefault?: () => Zod.ZodTypeAny;
       _def?: { innerType?: Zod.ZodTypeAny };
     };
-    if (tagged[ASSET_META]) {
-      return tagged[ASSET_META];
-    }
     if (typeof tagged.unwrap === "function") {
       current = tagged.unwrap();
       continue;
@@ -128,30 +154,52 @@ export function getAssetMeta(schema: Zod.ZodTypeAny): AssetMeta | null {
   return null;
 }
 
+/**
+ * Read the human-readable description attached with Zod's native `.describe()`.
+ * The description may sit on the outer wrapper (`z.string().optional().describe()`)
+ * OR the inner schema (`z.string().describe().optional()`) — walk wrappers
+ * outer-to-inner and return the first one found (outer wins). Returns `undefined`
+ * when no description was set. See `docs/configuration.md` (field descriptions).
+ */
+export function getFieldDescription(schema: Zod.ZodTypeAny): string | undefined {
+  let current: Zod.ZodTypeAny = schema;
+  for (let i = 0; i < 8; i++) {
+    const desc = (current as Zod.ZodTypeAny & { description?: unknown }).description;
+    if (typeof desc === "string" && desc.length > 0) return desc;
+    const anySchema = current as Zod.ZodTypeAny & {
+      unwrap?: () => Zod.ZodTypeAny;
+      removeDefault?: () => Zod.ZodTypeAny;
+      _def?: { innerType?: Zod.ZodTypeAny };
+    };
+    if (typeof anySchema.unwrap === "function") {
+      current = anySchema.unwrap();
+      continue;
+    }
+    if (typeof anySchema.removeDefault === "function") {
+      current = anySchema.removeDefault();
+      continue;
+    }
+    if (anySchema._def?.innerType) {
+      current = anySchema._def.innerType;
+      continue;
+    }
+    break;
+  }
+  return undefined;
+}
+
 function mark<T extends Zod.ZodTypeAny>(schema: T, kind: FieldKind): T {
-  Object.defineProperty(schema, FIELD_KIND, {
-    value: kind,
-    enumerable: false,
-    configurable: true,
-  });
+  defineBrand(schema, FIELD_KIND, kind);
   return schema;
 }
 
 function markRelation<T extends Zod.ZodTypeAny>(schema: T, meta: RelationMeta): T {
-  Object.defineProperty(schema, RELATION_META, {
-    value: meta,
-    enumerable: false,
-    configurable: true,
-  });
+  defineBrand(schema, RELATION_META, meta);
   return mark(schema, "structural");
 }
 
 function markAsset<T extends Zod.ZodTypeAny>(schema: T, meta: AssetMeta): T {
-  Object.defineProperty(schema, ASSET_META, {
-    value: meta,
-    enumerable: false,
-    configurable: true,
-  });
+  defineBrand(schema, ASSET_META, meta);
   return mark(schema, "structural");
 }
 
@@ -180,6 +228,11 @@ export interface RelationFieldOptions {
  * Options for `field.asset()`. Constraints live here (not as chained Zod
  * methods) because chaining clones the schema and would drop the asset
  * metadata. See `docs/assets.md` for the full design.
+ *
+ * A "multiple" field (`{ multiple: true }`) holds an **array** of web paths.
+ * This is the supported API for many-assets — NOT `z.array(field.asset())`,
+ * which mis-detects: `getAssetMeta` unwraps arrays, so it would read the inner
+ * single-asset brand and treat the array as one path.
  */
 export interface AssetFieldOptions {
   /** Web-path prefix the value must live under (e.g. `"/try-on/garments"`). Also declares a managed root. */
@@ -189,6 +242,8 @@ export interface AssetFieldOptions {
    * `{slug}` is the entry's EN slug. When set, the frontmatter field may be
    * omitted entirely; the loader fills it. An explicit frontmatter value
    * overrides the template. Its static prefix counts as a managed root.
+   * Cannot be combined with `multiple` (a template materializes one `{slug}`
+   * path; a multiple field carries explicit paths).
    */
   template?: string;
   /** Allowed extensions (lowercase, no dot). Violation = validation warning. */
@@ -203,20 +258,36 @@ export interface AssetFieldOptions {
    * document outside the deletion set still references it. See `docs/deletion.md`.
    */
   onDelete?: AssetOnDelete;
+  /** The field holds an array of web paths instead of a single one. Mirrors `field.relation`'s multi support. */
+  multiple?: boolean;
+  /** Minimum item count (`multiple: true` only). */
+  min?: number;
+  /** Maximum item count (`multiple: true` only). */
+  max?: number;
 }
 
 type Bool<T> = [T] extends [true] ? true : false;
 
 /**
- * Zod shape of a `field.asset()` schema: optional only when `optional` is set.
+ * Zod shape of a `field.asset()` schema: an array of strings when
+ * `{ multiple: true }`, otherwise a single string; wrapped in `ZodOptional`
+ * only when `optional` is set.
  *
- * A non-optional `template` field types as `ZodString` even though the runtime
- * schema tolerates an absent frontmatter value: the loader materializes the
- * templated path onto every document it serves (`resolveDocumentAssets` runs on
- * both EN and locale docs), so consumers always observe a `string`.
+ * A non-optional single `template` field types as `ZodString` even though the
+ * runtime schema tolerates an absent frontmatter value: the loader materializes
+ * the templated path onto every document it serves (`resolveDocumentAssets`
+ * runs on both EN and locale docs), so consumers always observe a `string`.
+ * A `multiple` field always observes a `string[]` (each element already
+ * prefixed with `publicPath`); it has no template.
  */
 export type AssetField<TOpts extends AssetFieldOptions = AssetFieldOptions> =
-  Bool<TOpts["optional"]> extends true ? Zod.ZodOptional<Zod.ZodString> : Zod.ZodString;
+  Bool<TOpts["optional"]> extends true
+    ? Zod.ZodOptional<
+        Bool<TOpts["multiple"]> extends true ? Zod.ZodArray<Zod.ZodString> : Zod.ZodString
+      >
+    : Bool<TOpts["multiple"]> extends true
+      ? Zod.ZodArray<Zod.ZodString>
+      : Zod.ZodString;
 
 type RelationZod<TOpts extends RelationFieldOptions> =
   Bool<TOpts["optional"]> extends true
@@ -274,16 +345,39 @@ export const field = {
   },
   asset: <const TOpts extends AssetFieldOptions = {}>(options?: TOpts): AssetField<TOpts> => {
     const optional = options?.optional ?? false;
-    const inner = z.string().min(1);
-    markAsset(inner, {
+    const multiple = options?.multiple ?? false;
+    if (multiple && options?.template !== undefined) {
+      throw new Error(
+        "field.asset: { multiple: true } cannot be combined with a template — a template " +
+          "materializes one {slug} path, but a multiple field carries explicit paths in frontmatter.",
+      );
+    }
+    if ((options?.min !== undefined || options?.max !== undefined) && !multiple) {
+      throw new Error("field.asset: min/max require { multiple: true }");
+    }
+    const meta: AssetMeta = {
       dir: options?.dir,
       template: options?.template,
       formats: options?.formats,
       maxKB: options?.maxKB,
       optional,
       onDelete: options?.onDelete ?? "delete",
-    });
-    // A templated field may be omitted in frontmatter — the loader materializes it.
+      multiple,
+    };
+    if (options?.min !== undefined) meta.min = options.min;
+    if (options?.max !== undefined) meta.max = options.max;
+
+    let inner: Zod.ZodTypeAny;
+    if (multiple) {
+      let arr = z.array(z.string().min(1));
+      if (options?.min !== undefined) arr = arr.min(options.min);
+      if (options?.max !== undefined) arr = arr.max(options.max);
+      inner = arr;
+    } else {
+      inner = z.string().min(1);
+    }
+    markAsset(inner, meta);
+    // A templated single field may be omitted in frontmatter — the loader materializes it.
     const schema = optional || options?.template !== undefined ? inner.optional() : inner;
     return schema as AssetField<TOpts>;
   },
@@ -325,7 +419,7 @@ export function peelOptionalWrappers(schema: Zod.ZodTypeAny): Zod.ZodTypeAny {
       continue;
     }
     if (type === "default") {
-      current = (current as Zod.ZodDefault<Zod.ZodTypeAny>).removeDefault();
+      current = (current as Zod.ZodDefault<Zod.ZodTypeAny>).unwrap() as Zod.ZodTypeAny;
       continue;
     }
     break;

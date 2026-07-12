@@ -39,7 +39,7 @@ describe("buildPreviewTokens", () => {
     const { tokens } = extractInlineTokens("x ${{relation:glossary:foo:href}} y");
     const pv = buildPreviewTokens(tokens, { enFrontmatter: {}, docExists: () => true });
     assert.equal(pv[0]!.kind, "relation");
-    assert.equal(pv[0]!.studioUrl, "/type/glossary/doc/foo");
+    assert.equal(pv[0]!.studioUrl, "/types/glossary/foo");
     assert.equal(pv[0]!.label, "foo");
     assert.equal(pv[0]!.dangling, false);
   });

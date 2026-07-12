@@ -40,6 +40,16 @@ describe("introspectStudioFields", () => {
     const note = fields.find((f) => f.path.join(".") === "note");
     assert.equal(note?.kind, "translatable");
   });
+
+  it("propagates a field's .describe() text onto the studio meta", () => {
+    const schema = z.object({
+      status: field.structural(z.enum(["a", "b"]).describe("workflow state")),
+      plain: field.structural(z.string()),
+    });
+    const fields = introspectStudioFields(schema);
+    assert.equal(fields.find((f) => f.path.join(".") === "status")?.description, "workflow state");
+    assert.equal(fields.find((f) => f.path.join(".") === "plain")?.description, undefined);
+  });
 });
 
 describe("filterFieldsFor", () => {
@@ -53,6 +63,14 @@ describe("filterFieldsFor", () => {
     assert.equal(byKey.get("featured")?.kind, "boolean");
     // asset fields are never filters
     assert.equal(byKey.has("resultImage"), false);
+  });
+
+  it("carries field .describe() text onto the filter meta", () => {
+    const schema = z.object({
+      status: field.structural(z.enum(["a", "b"]).describe("workflow state")),
+    });
+    const byKey = new Map(filterFieldsFor(schema).map((f) => [f.key, f]));
+    assert.equal(byKey.get("status")?.description, "workflow state");
   });
 });
 

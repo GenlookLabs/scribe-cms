@@ -83,20 +83,51 @@ const garmentSchema = z.object({
 Follows the `field.relation()` pattern: **constraints live in the options
 object, not chained Zod methods**, because chaining clones the schema and
 drops the symbol metadata. Implementation mirrors `RELATION_META`: an
-`ASSET_META` symbol carrying `{ dir?, template?, formats?, maxKB?, optional }`,
+`ASSET_META` symbol carrying
+`{ dir?, template?, formats?, maxKB?, optional, onDelete, multiple, min?, max? }`,
 a `getAssetMeta(schema)` introspection helper exported next to
 `getRelationTarget`, and the field marked `structural` (asset paths are never
-sent to the translator).
+sent to the translator). The `ASSET_META` symbol is branded onto both the schema
+instance and its `_def`, so a `.describe("…")` clone (see
+[Field descriptions](./configuration.md#field-descriptions)) keeps the brand.
 
 Options:
 
 | Option | Type | Meaning |
 |---|---|---|
 | `dir` | `string?` | Web-path prefix the value must live under. Also declares a managed root. |
-| `template` | `string?` | Derived-path template, e.g. `"/try-on/garments/{slug}/product.webp"`. `{slug}` is the entry's EN slug. When set, the frontmatter field may be omitted entirely — the loader fills it. An explicit frontmatter value overrides the template (intentional sharing between entries). A `template` implies its static prefix as a managed root; `dir` is optional alongside it. |
+| `template` | `string?` | Derived-path template, e.g. `"/try-on/garments/{slug}/product.webp"`. `{slug}` is the entry's EN slug. When set, the frontmatter field may be omitted entirely — the loader fills it. An explicit frontmatter value overrides the template (intentional sharing between entries). A `template` implies its static prefix as a managed root; `dir` is optional alongside it. Cannot be combined with `multiple`. |
 | `formats` | `string[]?` | Allowed extensions (lowercase, no dot). Violation = validation warning. |
 | `maxKB` | `number?` | File-size budget. Violation = validation warning. |
 | `optional` | `boolean?` | Field may be absent (only meaningful without `template`). Missing file for a present value is still an error. |
+| `multiple` | `boolean?` | Field holds an **array** of web paths. Mirrors `field.relation`'s multi support. |
+| `min` / `max` | `number?` | Array length bounds (`multiple: true` only). Out-of-range item counts are errors. |
+
+### Multiple asset fields
+
+`field.asset({ multiple: true })` declares a field that holds an array of web
+paths (`z.array(z.string().min(1))` under the hood, wrapped in `optional` when
+`optional: true`). This is the supported API for many-assets — do **not** use
+`z.array(field.asset())`: `getAssetMeta` unwraps arrays, so it would read the
+inner single-asset brand and mis-detect the array as one path. Combining
+`multiple` with `template` throws at config time, because a template
+materializes one `{slug}` path while a multiple field carries explicit paths in
+frontmatter.
+
+```ts
+const albumSchema = z.object({
+  images: field.asset({ dir: "/gallery", formats: ["webp"], multiple: true, min: 1, max: 8 }),
+});
+// frontmatter: images: ["/gallery/a.webp", "/gallery/b.webp"]
+```
+
+Every consumer treats a multiple field element-wise: the loader prefixes each
+element with `publicPath`, validation checks each element (plus the min/max
+count), the deletion planner collects every element into the asset-reference
+graph (so orphan/shared detection covers all files), and the studio renders a
+thumbnail strip (with the first element as the gallery card image and a `+N`
+badge when more exist). A multiple field's `dir` participates in the managed
+roots exactly like a single field's.
 
 Value semantics:
 
@@ -164,6 +195,10 @@ New behavior for declared asset fields:
   (contentType, enSlug, field path — not today's generic `field: "asset"`).
 - Templated fields validate the *materialized* path (file must exist even
   though frontmatter omits the value).
+- **Multiple fields** validate each element (existence, `dir`, `formats`,
+  `maxKB`) with an indexed field path (`images.1 → …`), plus the array count:
+  an empty or absent required array is a "required but empty" error, and a count
+  below `min` / above `max` is an error.
 
 ## Audit *(phase 2)*
 
@@ -191,9 +226,9 @@ table later doubles as the preprocessing cache/manifest.
   store; a hand-rename silently breaks every locale until full
   retranslation — this command is the safe path.)
 
-## Studio *(read-only — shipped)*
+## Studio *(shipped)*
 
-The studio content and asset browsing surfaces below are implemented; see
+The studio content and asset surfaces below are implemented; see
 [studio-content.md](./studio-content.md) for the shipped behavior. Same
 architecture (Hono, server-rendered, no build step). Surfaces on top of schema
 introspection:
@@ -208,6 +243,14 @@ introspection:
   (orphan/duplicate/oversized), reverse-reference list per asset.
 - **Gallery view** — any type with asset fields can render its entry list as
   a card grid (QA wall for generated imagery).
+- **Uploads (create/edit forms)** — an asset field's file input writes the
+  uploaded bytes to the same source path the loader/validator expect: a
+  **templated** field materializes `{slug}` into its `template` and keeps the
+  frontmatter key omitted; a **dir**-based field writes `{slug}.{ext}` (or
+  `{slug}-{n}.{ext}` for `multiple`) under `dir` and stores that web path in
+  frontmatter. Uploads are checked against `formats`/`maxKB` before any write
+  and rejected inline — the studio never converts or resizes (that stays a
+  source-authoring concern). See [studio-content.md](./studio-content.md).
 
 ## Preprocessing forward-compatibility (design commitments)
 

@@ -33,7 +33,7 @@ export function buildPreviewTokens(
       case "asset":
         return { kind: "asset", raw: t.raw, value: t.webPath };
       case "relation": {
-        const studioUrl = `/type/${encodePathSegment(t.targetTypeId)}/doc/${encodePathSegment(t.enSlug)}`;
+        const studioUrl = `/types/${encodePathSegment(t.targetTypeId)}/${encodePathSegment(t.enSlug)}`;
         return {
           kind: "relation",
           raw: t.raw,

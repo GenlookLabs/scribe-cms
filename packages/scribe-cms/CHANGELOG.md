@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.0.23 — 2026-07-12
+
+### Added
+
+- Studio entry creation and editing: `/types/:type/new` and `/types/:type/:enSlug/edit`. Forms are generated from the content type's Zod schema (text/number/boolean/enum widgets, relation pickers, asset uploads, a YAML textarea escape hatch for nested structural fields, and the MDX body). Every write is a plain file write: one frontmatter file per entry plus image files under the assets dir. Slugs auto-derive from the first translatable string field on create and are immutable on edit. Validation runs before anything is written (schema parse, relation existence, slug and alias collisions, upload format and size); errors re-render the form with values preserved. New entries are always created as `.mdx`; existing `.md` files stay readable and editable.
+- Image uploads in the entry form: templated asset fields upload straight to their materialized `{slug}` destination (the frontmatter key stays omitted), dir-based fields write `{dir}/{slug}.{ext}` and store the web path. Files that violate `formats` or `maxKB` are rejected with an inline error, never converted.
+- Multiple asset fields: `field.asset({ multiple: true, min, max })` holds an array of web paths (explicit paths; combining `template` with `multiple` is a config-time error). Per-element validation, deletion planning, orphan detection, and studio rendering (thumbnail strips, `+N` gallery badge) cover every element. The entry form supports multi-file upload with keep/remove/append ordering.
+- Field descriptions: Zod's native `.describe("help text")` on any field (including `field.asset()` and `field.relation()`) surfaces as help text in the studio inspector and entry forms.
+- Searchable relation pickers: relation fields render as a filterable option list (radios for single, checkboxes for multiple) with a live "N of M" count; the filter appears for lists longer than 8 options.
+
+### Changed
+
+- Content-first studio navigation: `/` is now a content home (type cards with entry counts, validation badges, and per-type New buttons); the translation dashboards are consolidated under `/translations` (Coverage and Staleness tabs); per-entry translation status moved to a Translations tab on the entry inspector. Legacy routes (`/dashboard`, `/staleness`, `/type/:id`, `/type/:id/doc/:enSlug`) 301-redirect to their new homes.
+- Internal: the studio server was split (legacy translation views extracted into their own module, route handlers thinned) and the four asset-path traversals were unified on a shared `walkAssetValues` primitive.
+
+### Fixed
+
+- Calling `.describe()` on a `field.asset()` or `field.relation()` schema no longer strips the field's asset/relation metadata (the brand now survives Zod's clone-on-describe).
+- The studio's YAML textarea parses with js-yaml's safe schema, so YAML type tags cannot execute code at parse time.
+
 ## 0.0.22 — 2026-07-07
 
 ### Changed

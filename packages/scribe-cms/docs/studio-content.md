@@ -1,19 +1,44 @@
-# Studio: content management (read-only)
+# Studio: content management
 
-> Status: **requirements** — agreed scope for the studio revamp. The current
-> studio is a translation dashboard (Hono, server-rendered HTML, no build
-> step); this document adds read-only content management on top of it. Same
-> architecture, same visual language. See [assets.md](./assets.md) for the
-> asset system this consumes.
+> Status: **shipped**. The studio started as a translation dashboard (Hono,
+> server-rendered HTML, no build step); it is now **content-first** — it
+> browses, inspects, and **creates/edits/deletes** content, with translation
+> coverage folded into its own section. Same architecture, same visual language.
+> See [assets.md](./assets.md) for the asset system this consumes.
+
+## Navigation
+
+The activity bar (far-left rail) has exactly three destinations:
+
+| Icon | Label | Route | What it is |
+|---|---|---|---|
+| ⌂ | Content | `/` | Content home — a grid of content-type cards (label, entry count, validation badge, per-card "+ New"). The card links to the type's collection browser. |
+| ⇄ | Translations | `/translations` | Tabbed section: **Coverage** (per-locale + per-type coverage tables) and **Staleness** (the stale/missing worklist). |
+| ▤ | Assets | `/assets` | Asset browser (only shown when the project manages assets). |
+
+The sidebar keeps the global search box and the content-type tree; each tree
+row reveals a subtle "+" on hover linking to that type's **new-entry** form.
+Per-entry translation status lives inside the inspector under a **Translations**
+tab (`/types/:typeId/:enSlug?tab=translations`), not in a separate route.
+
+The former translation routes 301-redirect to their new homes: `/dashboard` →
+`/translations`, `/staleness` → `/translations?tab=staleness`, `/type/:id` →
+`/types/:id`, and `/type/:id/doc/:enSlug` → `/types/:id/:enSlug?tab=translations`.
 
 ## Goal
 
-Humans can **see and verify** everything Scribe manages without opening
-files: browse collections, inspect entries with resolved relations and asset
-previews, spot bad or missing imagery at a glance, and answer "what uses
-this?" before changing anything.
+Humans can **see, verify, and edit** everything Scribe manages without opening
+files by hand: browse collections, inspect entries with resolved relations and
+asset previews, spot bad or missing imagery at a glance, answer "what uses
+this?" before changing anything, and create or edit an entry through a
+schema-derived form.
 
-Agents and humans **edit files**; the studio is where humans **review**.
+Files stay the source of truth: **agents and humans edit files**, and the
+studio is one of the humans — every studio write is a plain file write (one
+`.md`/`.mdx` frontmatter file per entry, plus image files under the assets
+dir). A studio session's git diff looks exactly like a hand edit. No database
+writes, no hidden state. New entries are always created as `.mdx`; existing
+`.md` files stay readable and editable in place.
 
 ## Decisions (locked)
 
@@ -24,15 +49,66 @@ Agents and humans **edit files**; the studio is where humans **review**.
 | Search | **Field filters per type + global full-text search** |
 | Reverse references | **Everywhere** — relations and assets both get "used by" lists |
 
-## Non-goals (v1)
+## Non-goals
 
-Content editing, translation triggering, image upload, auth/multi-user, true
-MDX component rendering, deployment/snapshot builds. The existing translation
-views stay as they are.
+Translation triggering, auth/multi-user, true MDX component rendering,
+deployment/snapshot builds. Translation coverage/staleness views still exist,
+now consolidated under `/translations` and the inspector's Translations tab.
+Slug **renaming** is out of scope (edit shows the slug read-only).
 
-Entry **deletion** shipped later and is the exception: a studio Delete button
-posts to `POST /types/:typeId/:enSlug/delete` (the studio's first mutating
-route). Field editing remains out of scope. See [deletion.md](./deletion.md).
+## Mutations (creation, editing, deletion)
+
+Creation and editing shipped as a v2 decision — the studio is now a first-class
+editor, not just a reviewer. Every mutation is a localhost-only, POST-only route
+(no CSRF token; same trust model as a local dev tool) that ends in plain file
+writes and a `studioCache.invalidate()` + redirect:
+
+| Action | Route |
+|---|---|
+| New entry | `GET`/`POST /types/:typeId/new` |
+| Edit entry | `GET`/`POST /types/:typeId/:enSlug/edit` |
+| Delete entry | `GET`/`POST /types/:typeId/:enSlug/delete` (see [deletion.md](./deletion.md)) |
+
+The collection browser toolbar has a **+ New entry** button; the entry
+inspector header has **Edit** next to Delete.
+
+### The form
+
+The form is generated from the schema (`studio/entry-forms.ts`), one control per
+top-level field, in declaration order, each with its `.describe()` text as muted
+help:
+
+- `string` → text input, `number` → number input, `boolean` → checkbox,
+  enum → `<select>` (optional enums get an empty option).
+- relation (single) → `<select>` of target entries; relation (multiple) →
+  checkbox list. Option value is the target's EN slug.
+- asset (single) → file input. A **templated** field shows its computed
+  destination path (materialized from the current slug, live-updated) and keeps
+  the frontmatter key omitted (the loader fills it); a **dir**-based field
+  writes `{slug}.{ext}` and stores the web path in frontmatter.
+- asset (multiple) → multi file input; on edit, existing items render as
+  thumbnails each with a "remove" checkbox. The final array is the kept existing
+  items (original order) followed by new uploads (file order); new files are
+  named `{slug}-{n}.{ext}` continuing after the highest existing index.
+- Nested objects / object-arrays that don't map to a widget fall back to a
+  labeled **YAML textarea**, parsed on submit.
+- body (unless `body: false`) → a monospace textarea.
+
+On **create** the slug input auto-derives (slugified) from the first
+translatable string field until you edit it by hand; it is checked against the
+type's existing EN slugs and `_redirects.json` aliases. On **edit** the slug is
+read-only.
+
+### Writing (`studio/entry-write.ts`)
+
+The submission is validated **before anything is written**: the type's Zod
+schema (`safeParse`), relation targets exist, and each uploaded file's extension
+is in `formats` with size within `maxKB` (rejected inline — no conversion). On
+any failure the form re-renders with every value preserved and per-field error
+messages. Only after full validation does it write image files, then the entry
+file. On edit it preserves frontmatter keys the schema doesn't manage (e.g.
+`publishedAt`, `vars`) and leaves the body bytes untouched unless the body
+textarea changed.
 
 ## Surfaces
 
@@ -72,6 +148,10 @@ Fields rendered by introspected kind:
   Uses the already-present remark-parse/remark-mdx dependencies; no new
   runtime deps. A "view on site" link for routable types (path template +
   locale).
+- **Translations tab** (`?tab=translations`, translatable types only) — the
+  per-locale translation detail: status, model, timestamp, the stored (or
+  EN-merged) frontmatter, the translated body (raw/preview), and the EN
+  snapshot captured at translation time. Details stays the default view.
 
 ### 3. Asset browser — `/assets`
 
@@ -121,5 +201,7 @@ into the inspector. Slugs and asset paths are searchable.
    components as labeled prop boxes. Escape-first, with a preformatted fallback
    so malformed input never crashes.
 
-Each step ships usable on its own; the existing translation dashboard keeps
-working throughout.
+Each step shipped usable on its own. A later pass made the studio content-first:
+`/` became the content home, the translation dashboard/staleness/overview
+collapsed into the tabbed `/translations` section, and per-entry translation
+status moved into the inspector's Translations tab (legacy routes 301-redirect).

@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import {
   getAssetMeta,
+  getFieldDescription,
   getFieldKind,
   getRelationTarget,
   peelOptionalWrappers,
@@ -24,6 +25,14 @@ export interface SchemaFieldMeta {
   assetOptional?: boolean;
   /** Whether the asset file is deleted with its document (asset fields). */
   assetOnDelete?: AssetOnDelete;
+  /** Asset field holds an array of paths (`field.asset({ multiple: true })`). Present only when true. */
+  assetMultiple?: boolean;
+  /** Minimum item count for a multiple asset field. */
+  assetMin?: number;
+  /** Maximum item count for a multiple asset field. */
+  assetMax?: number;
+  /** Human-readable help text from the field's Zod `.describe()`. Present only when set. */
+  description?: string;
 }
 
 function getArrayElement(schema: z.ZodTypeAny): z.ZodTypeAny | null {
@@ -45,40 +54,50 @@ function getArrayElement(schema: z.ZodTypeAny): z.ZodTypeAny | null {
  * would silently flatten the array level out of the paths.
  */
 export function introspectSchema(schema: z.ZodTypeAny, prefix: string[] = []): SchemaFieldMeta[] {
+  // Attach the field's `.describe()` help text to a leaf meta, when present.
+  const withDesc = (meta: SchemaFieldMeta): SchemaFieldMeta => {
+    const description = getFieldDescription(schema);
+    return description ? { ...meta, description } : meta;
+  };
+
   const relation = getRelationTarget(schema);
   if (relation && prefix.length > 0) {
     return [
-      {
+      withDesc({
         path: prefix,
         kind: "relation",
         relationTarget: relation.typeId,
         relationMultiple: relation.multiple,
         relationOptional: relation.optional,
         relationOnTargetDelete: relation.onTargetDelete,
-      },
+      }),
     ];
   }
 
+  // Asset detection short-circuits before array recursion, so a multiple field's
+  // inner `z.array(z.string())` is never descended as an object-array `*` path.
   const asset = getAssetMeta(schema);
   if (asset && prefix.length > 0) {
-    return [
-      {
-        path: prefix,
-        kind: "asset",
-        assetDir: asset.dir,
-        assetTemplate: asset.template,
-        assetFormats: asset.formats,
-        assetMaxKB: asset.maxKB,
-        assetOptional: asset.optional,
-        assetOnDelete: asset.onDelete,
-      },
-    ];
+    const meta: SchemaFieldMeta = {
+      path: prefix,
+      kind: "asset",
+      assetDir: asset.dir,
+      assetTemplate: asset.template,
+      assetFormats: asset.formats,
+      assetMaxKB: asset.maxKB,
+      assetOptional: asset.optional,
+      assetOnDelete: asset.onDelete,
+    };
+    if (asset.multiple) meta.assetMultiple = true;
+    if (asset.min !== undefined) meta.assetMin = asset.min;
+    if (asset.max !== undefined) meta.assetMax = asset.max;
+    return [withDesc(meta)];
   }
 
   // An explicit translatable mark makes the whole subtree one translation unit
   // (e.g. field.translatable(z.array(z.string()))).
   if (prefix.length > 0 && getFieldKind(schema) === "translatable") {
-    return [{ path: prefix, kind: "translatable" }];
+    return [withDesc({ path: prefix, kind: "translatable" })];
   }
 
   const base = peelOptionalWrappers(schema);
@@ -104,7 +123,7 @@ export function introspectSchema(schema: z.ZodTypeAny, prefix: string[] = []): S
     }
   }
 
-  return [{ path: prefix, kind: getFieldKind(schema) }];
+  return [withDesc({ path: prefix, kind: getFieldKind(schema) })];
 }
 
 interface PathTrie {

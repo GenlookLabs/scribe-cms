@@ -5,6 +5,7 @@ import {
   type SchemaFieldMeta,
 } from "../core/introspect-schema.js";
 import type { ScribeDocument, ScribeProject } from "../core/types.js";
+import { walkAssetValues } from "../core/walk-asset-values.js";
 import { extractInlineTokens } from "../inline/tokens.js";
 import { openStore } from "../storage/sqlite.js";
 import {
@@ -143,27 +144,19 @@ function assetValuesAt(
   enSlug: string,
 ): string[] {
   const out: string[] = [];
-  const walk = (container: unknown, remaining: string[]): void => {
-    const [head, ...rest] = remaining;
-    if (head === undefined) return;
-    if (typeof container !== "object" || container === null || Array.isArray(container)) return;
-    const record = container as Record<string, unknown>;
-    if (rest.length === 0) {
-      const value = record[head];
-      if (typeof value === "string" && value) out.push(value);
-      else if (value === undefined && field.assetTemplate) {
+  // For a multiple field each element is collected; the field-level summary
+  // visit (raw = the array) and any absent visit are ignored (not strings).
+  walkAssetValues(
+    frontmatter,
+    field.path,
+    ({ raw }) => {
+      if (typeof raw === "string" && raw) out.push(raw);
+      else if (raw === undefined && field.assetTemplate) {
         out.push(field.assetTemplate.split("{slug}").join(enSlug));
       }
-      return;
-    }
-    if (rest[0] === "*") {
-      const arr = record[head];
-      if (Array.isArray(arr)) for (const item of arr) walk(item, rest.slice(1));
-      return;
-    }
-    walk(record[head], rest);
-  };
-  walk(frontmatter, field.path);
+    },
+    { multiple: field.assetMultiple },
+  );
   return out;
 }
 
