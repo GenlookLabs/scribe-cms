@@ -1,0 +1,22 @@
+---
+version: "0.0.23"
+publishedAt: "2026-07-12"
+---
+
+## Added
+
+- Create and edit entries from the studio: forms are generated from each content type's schema, with widgets for every field kind, inline validation errors, and slug auto-derivation. Every save is a plain file write, so a studio session reads like a hand edit in git
+- Image uploads in entry forms: files land exactly where the config says (templated `{slug}` destinations or the field's directory), with format and size limits enforced. Nothing is ever converted behind your back
+- Multiple asset fields: `field.asset({ multiple: true })` attaches an ordered gallery of images to one entry, validated per element and covered by deletion planning and orphan detection
+- Field help text: Zod's `.describe("...")` on any field shows up as help text in the studio inspector and entry forms
+- Searchable relation pickers: long relation lists get a filter box with a live match count
+
+## Changed
+
+- The studio is now content-first: the home page shows your content types with entry counts, validation badges, and New buttons; translation dashboards live under a single Translations section, and per-entry translation status moved to a tab on the entry inspector. Old URLs redirect
+- New entries are always created as `.mdx`; existing `.md` files stay fully readable and editable
+
+## Fixed
+
+- `.describe()` on asset and relation fields no longer strips their field metadata
+- The studio's YAML editor uses js-yaml's safe schema, so YAML type tags cannot execute code
