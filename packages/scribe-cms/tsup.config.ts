@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     index: "src/index.ts",
     runtime: "src/runtime.ts",
+    rescue: "src/rescue.ts",
     "cli/index": "cli/index.ts",
     "studio/server": "studio/server.ts",
   },

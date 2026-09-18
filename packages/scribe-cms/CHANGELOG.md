@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.24 — 2026-08-18
+
+### Added
+
+- Cross-locale slug rescue: `createCrossLocaleRescue()` under the new `scribe-cms/rescue` entry — pure and dependency-free (no `fs`, no store access) so it runs in edge middleware. Localized slug strategies inevitably produce requests for a known slug under the wrong locale prefix (locale switchers that swap the prefix but keep the localized slug, `pref_locale`-style redirects, crawlers exploring the locale × slug matrix from historical links); the resolver 301s them to the document's URL in the requested locale instead of 404ing, and never serves content on a non-canonical URL. It indexes the build-generated alternates map by (path prefix, slug), and optionally your content-redirect map so RETIRED slugs under a wrong prefix rescue too: redirect sources are slotted per source locale (one slug under several locale prefixes with per-locale destinations is not an ambiguity), and the destination is hopped through its own hreflang cluster to the requested locale. Unknown slugs, slugs claimed by two documents, and exact pathnames all resolve to `null` — the rescue composes after an exact redirect map and never guesses. See [docs/cross-locale-rescue.md](./docs/cross-locale-rescue.md).
+
 ## 0.0.23 — 2026-07-12
 
 ### Added

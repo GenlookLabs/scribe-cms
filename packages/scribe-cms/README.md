@@ -4,7 +4,7 @@ Typed, file-based CMS for multilingual MDX. English source files on disk, locale
 
 Scribe has no framework dependency — it reads files and SQLite in-process and works with any Node-based stack (Next.js, Astro, Remix, SvelteKit, a static-site script, …). Examples in these docs use Next.js, but nothing about Scribe is Next-specific.
 
-**Docs:** [scribe.genlook.app/docs](https://scribe.genlook.app/docs) · [All guides](./docs/README.md) · [Getting started](./docs/getting-started.md) · [Configuration](./docs/configuration.md) · [Writing content](./docs/content.md) · [Runtime API](./docs/runtime-api.md) · [Translation](./docs/translation.md) · Feature guides: [inline tokens](./docs/inline-tokens.md), [assets](./docs/assets.md), [deletion](./docs/deletion.md), [bodyless types](./docs/bodyless-types.md)
+**Docs:** [scribe.genlook.app/docs](https://scribe.genlook.app/docs) · [All guides](./docs/README.md) · [Getting started](./docs/getting-started.md) · [Configuration](./docs/configuration.md) · [Writing content](./docs/content.md) · [Runtime API](./docs/runtime-api.md) · [Translation](./docs/translation.md) · Feature guides: [inline tokens](./docs/inline-tokens.md), [assets](./docs/assets.md), [deletion](./docs/deletion.md), [bodyless types](./docs/bodyless-types.md), [cross-locale rescue](./docs/cross-locale-rescue.md)
 
 ## Install
 

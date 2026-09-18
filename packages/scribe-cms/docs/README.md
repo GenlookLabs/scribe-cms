@@ -26,6 +26,7 @@ Scribe is a typed, file-based CMS for multilingual MDX sites.
 - [Assets](./assets.md) — `field.asset()`, loader URL resolution, and asset validation
 - [Bodyless types](./bodyless-types.md) — frontmatter-only content types and derived translatability
 - [Entry deletion](./deletion.md) — `scribe delete` and the reference cascade
+- [Cross-locale slug rescue](./cross-locale-rescue.md) — 301 known slugs requested under the wrong locale prefix from edge middleware
 
 ### Studio
 
