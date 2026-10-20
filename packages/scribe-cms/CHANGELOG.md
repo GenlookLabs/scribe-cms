@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.25 — 2026-10-14
+
+### Added
+
+- `translate.adapter` in `scribe.config.ts`: `adapter: gemini({ model, apiKey })` picks the translation model and API key in one place. `.env` / `.env.local` are loaded before the config, so `apiKey: process.env.MY_KEY` works. Gemini is the only provider today; the adapter shape leaves room for others.
+- `SCRIBE_TRANSLATE_API_KEY`: generic env var for the translation key, read before `GEMINI_API_KEY` (still supported).
+
+### Changed
+
+- Default translation model is now `gemini-3.8-flash` (was `gemini-3.1-pro`), with its pricing in cost estimates. Set `adapter: gemini({ model: "gemini-3.1-pro" })` to keep the old default.
+- `translate.defaultModel` is deprecated in favor of `adapter.model`; it is still honored when the adapter sets no model.
+
 ## 0.0.24 — 2026-08-18
 
 ### Added

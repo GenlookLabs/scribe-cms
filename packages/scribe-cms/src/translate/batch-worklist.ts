@@ -1,3 +1,4 @@
+import { resolveTranslateApiKey } from "./adapter.js";
 import type { BatchJob } from "@google/genai";
 import type { ScribeConfig, ScribeDocument } from "../core/types.js";
 import { readEnDocument } from "../loader/create-loader.js";
@@ -131,6 +132,7 @@ export async function submitBatchJobPlan<
 >(config: ScribeConfig, input: SubmitPlanInput<T>): Promise<BatchJobRow> {
   const { plan, displayModel, jobIndex, jobCount } = input;
   const job = await createGeminiBatchJob({
+    apiKey: resolveTranslateApiKey(config),
     model: plan.apiModel,
     requests: plan.entries.map(({ prepared }) => ({
       contents: prepared.prompt,
@@ -392,7 +394,10 @@ export async function pollAndIngestBatchJobs(
     firstRound = false;
 
     for (const tracked of [...active]) {
-      const batchJob: BatchJob = await getGeminiBatchJob({ name: tracked.row.job_name });
+      const batchJob: BatchJob = await getGeminiBatchJob({
+        name: tracked.row.job_name,
+        apiKey: resolveTranslateApiKey(config),
+      });
       const state = normalizeBatchState(batchJob.state);
       options.onProgress?.({
         type: "batch-polling",

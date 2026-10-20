@@ -59,7 +59,7 @@ translations stale — those fields aren't translated.
 ## Running it
 
 ```bash
-export GEMINI_API_KEY=...        # also read from .env / .env.local
+export SCRIBE_TRANSLATE_API_KEY=...   # or GEMINI_API_KEY; also read from .env / .env.local
 
 scribe status                     # coverage per type and locale
 scribe translate                  # everything missing/stale, all locales
@@ -76,6 +76,30 @@ scribe translate --resume         # pick up pending batch jobs, submit nothing n
 scribe translate --concurrency 5  # parallel requests (direct mode only)
 scribe translate --model gemini-3.1-pro
 ```
+
+## Model and API key
+
+Translation runs on Gemini, configured with `translate.adapter` in `scribe.config.ts`.
+The default is `gemini-3.8-flash`. `.env` and `.env.local` are loaded before the config,
+so the key can come straight from the environment:
+
+```ts
+import { defineConfig, gemini } from "scribe-cms";
+
+export default defineConfig({
+  // ...
+  translate: {
+    adapter: gemini({
+      model: "gemini-3.8-flash",               // optional
+      apiKey: process.env.MY_TRANSLATE_KEY,    // optional
+    }),
+  },
+});
+```
+
+Without an adapter key, Scribe reads `SCRIBE_TRANSLATE_API_KEY`, then `GEMINI_API_KEY`.
+Model precedence: `--model`, then the content type's `translate.model`, then the adapter
+`model` (or the deprecated `translate.defaultModel`), then `PROSE_GEMINI_MODEL`, then the default.
 
 Run in a terminal, `scribe translate` shows a live progress UI with batch job
 status, per-item results, running token counts, and an estimated cost in USD.
@@ -176,7 +200,8 @@ export default defineConfig({
 | `context`                | project + type  | Brand/domain context prepended to every request (project and type contexts are concatenated).                    |
 | `rules`                  | project + type  | Extra rules appended to the defaults.                                                                            |
 | `prompt`                 | project or type | Extra localization instructions prepended before the target-locale directive (the locale name and code are always appended). |
-| `defaultModel` / `model` | project / type  | Gemini model id. Default: `gemini-3.1-pro` (also overridable via the `PROSE_GEMINI_MODEL` env var or `--model`). |
+| `adapter`                | project         | Translation backend, model and API key: `gemini({ model, apiKey })`. See [Model and API key](#model-and-api-key). |
+| `model`                  | type            | Model override for one content type. Default: `gemini-3.8-flash`. `defaultModel` (project) is deprecated in favor of `adapter`. |
 
 Built-in rules (always applied) include: do not translate brand names unless they have a well-known local name in the target market, return MDX bodies with real line breaks (not `\\n` escapes), and fix JSX attribute quoting when values contain `"`.
 

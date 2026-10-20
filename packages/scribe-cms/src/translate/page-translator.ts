@@ -1,3 +1,4 @@
+import { resolveTranslateApiKey } from "./adapter.js";
 import type { ScribeConfig } from "../core/types.js";
 import { listBatchItems, type BatchJobRow } from "../storage/batch-jobs.js";
 import { openStore } from "../storage/sqlite.js";
@@ -247,6 +248,7 @@ export async function translatePage(
 
   try {
     const result = await translatePageWithGemini({
+      apiKey: resolveTranslateApiKey(config),
       prompt: prepared.prompt,
       model: prepared.model,
       responseSchema: prepared.responseSchema,

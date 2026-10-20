@@ -8,6 +8,8 @@ export interface TieredModelPricing {
 /** display_name -> { input: (le_200k, gt_200k), output: (le_200k, gt_200k) } in USD per 1M tokens */
 export const GEMINI_PRICING_USD: Record<string, TieredModelPricing> = {
   "gemini-3.1-pro": { input: [2.0, 4.0], output: [12.0, 18.0] },
+  // Introductory rate through 2026-12-31 (reported $1.50 / $7.50 after); flat across context tiers.
+  "gemini-3.8-flash": { input: [0.75, 0.75], output: [3.75, 3.75] },
 };
 
 function normalizeModelId(model: string): string {

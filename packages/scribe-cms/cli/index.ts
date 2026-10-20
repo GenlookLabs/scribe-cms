@@ -201,7 +201,7 @@ Translate flags:
   --preset <name>        Locale preset from config (interactive picker in a TTY)
   --locale <code>...     Target locale(s); overrides --preset
   --slug <en-slug>       Single English document
-  --model <id>           Gemini model override
+  --model <id>           Model override (default: translate.adapter model, else gemini-3.8-flash)
   --batch                Force Gemini Batch API mode (50% token cost; default)
   --direct               Force direct interactive calls (immediate, full price)
   --resume               Only poll/ingest pending batch jobs; submit nothing new

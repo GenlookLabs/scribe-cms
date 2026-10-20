@@ -12,7 +12,7 @@ Scribe has no framework dependency — it reads files and SQLite in-process and 
 pnpm add scribe-cms zod better-sqlite3
 ```
 
-Set `GEMINI_API_KEY` when using `scribe translate`.
+Set `SCRIBE_TRANSLATE_API_KEY` (or `GEMINI_API_KEY`) when using `scribe translate`, or pass a key with `translate.adapter`.
 
 ## Quickstart
 

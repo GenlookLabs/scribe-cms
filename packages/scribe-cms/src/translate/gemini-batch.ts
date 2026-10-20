@@ -1,3 +1,4 @@
+import { resolveTranslateApiKey } from "./adapter.js";
 import {
   type BatchJob,
   GoogleGenAI,
@@ -37,11 +38,7 @@ export function isSuccessfulBatchState(state: JobState | string | undefined): bo
 }
 
 function makeClient(apiKey?: string): GoogleGenAI {
-  const key = apiKey ?? process.env.GEMINI_API_KEY;
-  if (!key) {
-    throw new Error("GEMINI_API_KEY is required for scribe translate");
-  }
-  return new GoogleGenAI({ apiKey: key });
+  return new GoogleGenAI({ apiKey: apiKey ?? resolveTranslateApiKey({}) });
 }
 
 /**

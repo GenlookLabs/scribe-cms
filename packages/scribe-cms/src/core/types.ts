@@ -1,3 +1,4 @@
+import type { TranslateAdapter } from "../translate/adapter.js";
 import type { z } from "zod";
 import type { RELATION_BRAND, RelationBrand } from "./field.js";
 
@@ -68,6 +69,13 @@ export interface TranslateConfig {
 
 /** Project-level translation defaults. */
 export interface ScribeTranslateDefaults {
+  /**
+   * Translation backend, model and API key: `adapter: gemini({ model, apiKey })`.
+   * Omitted: Gemini with Scribe's default model, key from `SCRIBE_TRANSLATE_API_KEY`
+   * (or `GEMINI_API_KEY`).
+   */
+  adapter?: TranslateAdapter;
+  /** @deprecated Use `adapter: gemini({ model })`. Still honored when the adapter sets no model. */
   defaultModel?: string;
   prompt?: string;
   context?: string;

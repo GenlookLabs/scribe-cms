@@ -14,7 +14,7 @@ Works with Next.js, Astro, Remix, SvelteKit, or any Node stack.
 pnpm add scribe-cms zod better-sqlite3
 ```
 
-Requires Node 20+. Set `GEMINI_API_KEY` when using `scribe translate`.
+Requires Node 20+. Set `SCRIBE_TRANSLATE_API_KEY` (or `GEMINI_API_KEY`) when using `scribe translate`.
 
 ## Quick start
 

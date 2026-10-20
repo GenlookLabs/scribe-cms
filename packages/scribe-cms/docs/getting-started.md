@@ -120,7 +120,7 @@ const author = scribe.blog.related(document!, "author"); // AuthorDoc, non-null
 ## 5. Translate
 
 ```bash
-export GEMINI_API_KEY=...   # or put it in .env
+export SCRIBE_TRANSLATE_API_KEY=...   # or GEMINI_API_KEY, or put it in .env
 npx scribe translate --locale fr
 ```
 

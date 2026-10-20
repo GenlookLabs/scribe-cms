@@ -55,6 +55,8 @@ export type {
   ScribeDocs,
   ScribeDocOf,
 } from "./core/types.js";
+export { gemini, TRANSLATE_API_KEY_ENV } from "./translate/adapter.js";
+export type { TranslateAdapter, GeminiAdapterOptions } from "./translate/adapter.js";
 export { createScribe } from "./create-scribe.js";
 export { createProject } from "./create-project.js";
 export { isRoutableType, createUrlBuilder } from "./i18n/build-url.js";

@@ -4,9 +4,10 @@ import { ThinkingLevel, type ThinkingConfig } from "@google/genai";
 export const GEMINI_MODEL_IDS: Record<string, string> = {
   "gemini-2.5-pro": "gemini-2.5-pro",
   "gemini-3.1-pro": "gemini-3.1-pro-preview",
+  "gemini-3.8-flash": "gemini-3.8-flash",
 };
 
-export const DEFAULT_GEMINI_MODEL = "gemini-3.1-pro";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
 
 function stripModelsPrefix(model: string): string {
   return model.replace(/^models\//, "");

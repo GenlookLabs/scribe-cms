@@ -99,6 +99,11 @@ export function resolveConfig(
     };
   });
 
+  const adapter = raw.translate?.adapter;
+  if (adapter && adapter.provider !== "gemini") {
+    throw new Error(`Unknown translate.adapter provider "${String(adapter.provider)}" (supported: gemini).`);
+  }
+
   const config: ScribeConfig = {
     rootDir: contentRoot,
     storePath,

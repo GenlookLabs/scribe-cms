@@ -1,3 +1,4 @@
+import { resolveTranslateApiKey } from "./adapter.js";
 import { GoogleGenAI, type GenerateContentConfig, type GenerateContentResponse } from "@google/genai";
 import {
   DEFAULT_GEMINI_MODEL,
@@ -116,10 +117,7 @@ export async function translatePageWithGemini(input: {
   apiKey?: string;
   responseSchema?: Record<string, unknown>;
 }): Promise<GeminiTranslationResult> {
-  const apiKey = input.apiKey ?? process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is required for scribe translate");
-  }
+  const apiKey = input.apiKey ?? resolveTranslateApiKey({});
 
   const displayModel = normalizeGeminiDisplayName(
     input.model ?? process.env.PROSE_GEMINI_MODEL ?? DEFAULT_MODEL,

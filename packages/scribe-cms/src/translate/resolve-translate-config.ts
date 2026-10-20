@@ -58,7 +58,7 @@ function mergeTranslateConfig(
       ...(type?.rules ?? []),
       ...slugStrategyRules(slugStrategy),
     ],
-    model: type?.model ?? project?.defaultModel,
+    model: type?.model ?? project?.adapter?.model ?? project?.defaultModel,
   };
 }
 
