@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import yaml from "js-yaml";
+import { dump } from "js-yaml";
 import {
   getAssetMeta,
   getFieldDescription,
@@ -221,7 +221,7 @@ function asStringArray(value: unknown): string[] {
 function toYamlPreview(value: unknown): string {
   if (value === undefined || value === null) return "";
   try {
-    return yaml.safeDump(value).replace(/\n$/, "");
+    return dump(value).replace(/\n$/, "");
   } catch {
     return "";
   }

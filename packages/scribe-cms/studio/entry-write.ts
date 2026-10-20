@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Context } from "hono";
 import matter from "gray-matter";
-import yaml from "js-yaml";
+import { CORE_SCHEMA, load, mergeTag, timestampTag } from "js-yaml";
 import type { z } from "zod";
 import { SLUG_PATTERN } from "../src/core/builtin-fields.js";
 import { listEnSlugs } from "../src/core/alias-helpers.js";
@@ -67,6 +67,9 @@ export interface WriteEntryResult {
 
 /** Sentinel: this field is intentionally absent from frontmatter. */
 const OMIT = Symbol("omit");
+
+/** js-yaml 3's safe schema (what gray-matter uses) on js-yaml 5: YAML 1.2 core + dates + `<<`. */
+const FRONTMATTER_YAML_SCHEMA = CORE_SCHEMA.withTags(timestampTag, mergeTag);
 
 // ---------------------------------------------------------------------------
 // Small filesystem / path helpers (kept local to avoid re-exporting internals)
@@ -294,9 +297,9 @@ export function writeEntry(
       const raw = input.yaml[field.key];
       if (raw === undefined || raw.trim() === "") continue; // omit; Zod flags if required
       try {
-        // safeLoad: js-yaml v3's load() uses the full schema, where !!js/function
-        // compiles code at parse time — never acceptable, even on localhost.
-        const parsed = yaml.safeLoad(raw);
+        // Parse as gray-matter (js-yaml 3) reads the frontmatter back: dates
+        // and `<<` merges, but `yes`/`on` stay strings.
+        const parsed = load(raw, { schema: FRONTMATTER_YAML_SCHEMA });
         if (parsed !== undefined && parsed !== null) data[field.key] = parsed;
       } catch (err) {
         setError(field.key, `Invalid YAML: ${err instanceof Error ? err.message : String(err)}`);

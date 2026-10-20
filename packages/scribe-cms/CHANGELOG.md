@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.26 — 2026-10-20
+
+### Changed
+
+- `better-sqlite3` 13 (N-API). Prebuilt binaries now work on any Node version, so installs no longer compile from source after a Node upgrade. This also fixes the intermittent `RemoveEnvironmentCleanupHook` abort on Node 24.19+ (nodejs/node#65446), which hit 11.x builds at GC or process exit.
+- Node >= 22.13 is required (was >= 20), following `better-sqlite3` 13 and Inquirer.
+- Dependencies bumped to latest: `@google/genai` 2, `@hono/node-server` 2, `@inquirer/core` 12, `dotenv` 18 (its load message now goes to stderr), `js-yaml` 5, `hono`, `@inquirer/prompts`.
+- Studio YAML fields parse with the same rules gray-matter applies when it reads the file back: dates and `<<` merges are kept, and `yes`/`on` stay strings. One difference from before: a leading-zero number like `012` now reads as 12, not octal 10.
+
 ## 0.0.25 — 2026-10-14
 
 ### Added
