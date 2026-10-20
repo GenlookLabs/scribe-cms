@@ -27,7 +27,7 @@
     "scribe-cms": "workspace:*",
     "shiki": "^4.3.1",
     "unified": "^11.0.5",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.2",
