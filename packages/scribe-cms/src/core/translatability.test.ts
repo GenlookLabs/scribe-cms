@@ -53,4 +53,11 @@ describe("isTypeTranslatable", () => {
       true,
     );
   });
+
+  it("translatable: false → false even with a body and translatable fields", () => {
+    assert.equal(
+      isTypeTranslatable({ schema: translatableSchema, body: true, translatable: false }),
+      false,
+    );
+  });
 });

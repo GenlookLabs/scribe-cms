@@ -280,15 +280,19 @@ export function listTranslatableFields(schema: z.ZodTypeAny): SchemaFieldMeta[] 
 }
 
 /**
- * Whether a content type has anything to translate. A type with a body is
- * always potentially translatable; a bodyless type (`body: false`) is
- * translatable only when at least one schema field is `field.translatable()`.
+ * Whether a content type has anything to translate. `translatable: false` opts
+ * a type out explicitly. Otherwise a type with a body is always potentially
+ * translatable; a bodyless type (`body: false`) is translatable only when at
+ * least one schema field is `field.translatable()`.
  *
  * The single source of truth for every translation workflow (worklist, staleness,
- * status counts, studio dashboards, store writes): a type for which this returns
- * `false` disappears from all of them.
+ * status counts, studio dashboards, store writes, loader): a type for which this
+ * returns `false` disappears from all of them.
  */
-export function isTypeTranslatable(type: Pick<ContentTypeInput, "schema" | "body">): boolean {
+export function isTypeTranslatable(
+  type: Pick<ContentTypeInput, "schema" | "body" | "translatable">,
+): boolean {
+  if (type.translatable === false) return false;
   return listTranslatableFields(type.schema).length > 0 || type.body !== false;
 }
 

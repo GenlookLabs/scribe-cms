@@ -54,6 +54,7 @@ defineContentType({
   orderBy: "-publishedAt",     // default: "slug"
   label: "Blog",               // default: capitalized id (studio UI only)
   body: true,                  // default: true; set false for frontmatter-only types
+  translatable: false,         // optional: default-locale only, never translated
   crossValidate: (data, ctx) => [],
   translate: { /* per-type overrides */ },
 })
@@ -69,6 +70,7 @@ defineContentType({
 | `indexFallback` | What `resolve()` returns when a locale has no translation: `"en"` serves the English document (with `actualLocale: "en"`), `"none"` returns nothing. |
 | `orderBy` | Default sort for `list()`: `"slug"`, `"publishedAt"`, `"-publishedAt"`, `"updatedAt"`, `"-updatedAt"`, or a comparator `(a, b) => number` over fully-typed documents. |
 | `body` | Whether entries carry an MDX body. Default `true`. Set `false` for **frontmatter-only** reference types (e.g. a structural `model` catalog): the loader skips the body, `scribe validate` errors on any non-empty body, translation payloads never include a body, and the studio shows a "frontmatter-only" chip. A `body: false` type whose schema has **no** `field.translatable()` fields is derived non-translatable and drops out of every translation workflow (see [Bodyless types](./bodyless-types.md) and [Translation](./translation.md#derived-translatability)). |
+| `translatable` | Set `false` to keep the type in the default locale only (e.g. legal pages): it never enters a translation workflow, and stored translations are ignored, so locale routes fall back per `indexFallback`. Omit to derive it ([Translation](./translation.md#derived-translatability)). |
 | `crossValidate` | Extra validation run by `scribe validate`, receiving the parsed (typed) frontmatter. Return `{ field, message, level }[]`. |
 | `translate` | Per-type translation prompt/rules/model ([Translation](./translation.md)). |
 

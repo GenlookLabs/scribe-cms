@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.27 — 2026-10-22
+
+### Added
+
+- `translatable: false` on a content type keeps it in the default locale only (e.g. legal pages). The type drops out of every translation workflow (worklist, status counts, studio), and the loader ignores any translation rows already in the store, so locale routes serve the default-locale document via `indexFallback`. Before this, a type with a body was always translatable.
+
 ## 0.0.26 — 2026-10-20
 
 ### Changed

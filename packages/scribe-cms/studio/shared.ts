@@ -544,7 +544,7 @@ export function renderLayout(
       // translate, so it carries no per-locale status anywhere in the studio.
       const ntChip = isTypeTranslatable(type.config)
         ? ""
-        : ` <span class="chip nt" title="No translatable fields and no body">not translatable</span>`;
+        : ` <span class="chip nt" title="Not translated: translatable: false, or no body and no translatable fields">not translatable</span>`;
       const label = escapeHtml(type.config.label);
       return `<div class="tree-row">
         <a class="tree-item${active}" href="/types/${encodePathSegment(type.id)}">

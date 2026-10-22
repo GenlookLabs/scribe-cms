@@ -41,6 +41,11 @@ translation workflow, so it never trains reviewers to ignore red badges:
   dashboard, collection browser) instead of red status dots, and the store
   never writes snapshot or translation rows for it.
 
+To keep a type with a body in the default locale only, such as legal pages,
+set `translatable: false` on it. It drops out of the same workflows, and the
+loader ignores any translations already in the store, so locale routes serve
+the default-locale document through `indexFallback`.
+
 A bodyless type that *does* have a translatable field (e.g. a `garment` with a
 translatable `title`) stays in the todos — only the combination *bodyless and
 zero translatable fields* opts out entirely.

@@ -20,6 +20,7 @@ import type {
   ScribeConfig,
   ScribeDocument,
 } from "../core/types.js";
+import { isTypeTranslatable } from "../core/introspect-schema.js";
 import { openStore, resolveStorePath } from "../storage/sqlite.js";
 import { listTranslationsForType } from "../storage/translations.js";
 import { prepareTranslatedMdxBody } from "../translate/validate-mdx-body.js";
@@ -286,9 +287,14 @@ export function createContentLoader(
       byEnSlug: englishBySlug,
     });
 
-    const db = openStore(config, "readonly");
-    const rows = listTranslationsForType(db, type.id);
-    db.close();
+    // Non-translatable types serve the default locale everywhere: rows left in
+    // the store from before an opt-out are ignored, never shown.
+    let rows: ReturnType<typeof listTranslationsForType> = [];
+    if (isTypeTranslatable(type)) {
+      const db = openStore(config, "readonly");
+      rows = listTranslationsForType(db, type.id);
+      db.close();
+    }
 
     const rowsByLocale = new Map<string, typeof rows>();
     for (const row of rows) {

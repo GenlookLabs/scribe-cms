@@ -114,6 +114,13 @@ export interface ContentTypeInput<TSchema extends z.ZodTypeAny = z.ZodTypeAny> {
    * [Bodyless types](../../docs/bodyless-types.md).
    */
   body?: boolean;
+  /**
+   * Set `false` to keep a type in the default locale only (e.g. legal pages):
+   * it drops out of every translation workflow, and the loader ignores any
+   * stored translation rows, so locale routes fall back per `indexFallback`.
+   * Default: derived (see [Translation](../../docs/translation.md#derived-translatability)).
+   */
+  translatable?: false;
   /** Custom validation across fields, run by `scribe validate`. */
   crossValidate?: (
     data: z.infer<TSchema>,

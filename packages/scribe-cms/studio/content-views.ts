@@ -179,7 +179,7 @@ function chip(text: string, cls = ""): string {
 
 /** Neutral chip for a type with nothing to translate (bodyless + no translatable fields). */
 export function notTranslatableChip(): string {
-  return `<span class="chip nt" title="No translatable fields and no body">not translatable</span>`;
+  return `<span class="chip nt" title="Not translated: translatable: false, or no body and no translatable fields">not translatable</span>`;
 }
 
 /** Neutral chip shown instead of a body section for `body: false` types. */

@@ -298,7 +298,9 @@ mode to use.
         force: options.force,
         onSkipType: (type) =>
           console.log(
-            `${type.id}: not translatable (bodyless, no translatable fields) — skipped`,
+            type.translatable === false
+              ? `${type.id}: not translatable (translatable: false) — skipped`
+              : `${type.id}: not translatable (bodyless, no translatable fields) — skipped`,
           ),
       });
       if (worklist.length === 0) {
